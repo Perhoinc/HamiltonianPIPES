@@ -131,6 +131,20 @@ completion counts), rather than generating and discarding the ones before
 it. Exhaustively verified against brute-force enumeration (every index,
 not a sample) across dozens of grid shapes before shipping.
 
+You can also **pick a start and/or end cell** ("Pick start / end" mode):
+the exact count, browsing, and random search all then respect that
+constraint (paths from A to B, or just starting at A). This is a real
+algorithm change, not just a filter -- a designated cell is forced to be a
+path endpoint and every other cell is forbidden from being one, which
+required extending the DP's transition rules, the unranking walk, *and*
+the fast random search (whose naive endpoint-reservation approach turned
+out to be unreliable -- it was verified against the exact DP and found to
+report "no path" for cases with hundreds of valid solutions, so fixed
+start+end pairs are routed through the exact indexed system instead,
+which has no such failure mode). For a cycle, only "start" applies, and it
+just rotates which cell the trace is drawn from, since a cycle has no
+true endpoints.
+
 ## Project layout
 
 ```

@@ -175,6 +175,39 @@
   .card .card-sub { color: var(--muted); font-size: 13.5px; margin-bottom: 18px; }
 
   /* ---------- grid controls ---------- */
+  .mode-row {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 16px;
+  }
+  .mode-btn {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: 500 12.5px "IBM Plex Sans", sans-serif;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .mode-btn[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); box-shadow: var(--shadow); }
+  .mode-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+  .endpoint-marker { pointer-events: none; }
+  .endpoint-marker .glyph-start { fill: none; stroke-width: 2.5; }
+  .endpoint-marker .glyph-end { fill: none; stroke-width: 2.5; }
+  .endpoint-marker text {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+  .cell.pickable:hover { fill: var(--accent-cycle-soft); }
+
   .dims-row {
     display: flex;
     align-items: center;
@@ -423,7 +456,12 @@
   <div class="workspace">
     <section class="card" aria-labelledby="grid-heading">
       <h2 id="grid-heading">The grid</h2>
-      <p class="card-sub">Click any cell to cut it out of the grid. Routes weave around the gaps.</p>
+      <p class="card-sub" id="grid-card-sub">Click any cell to cut it out of the grid. Routes weave around the gaps.</p>
+
+      <div class="mode-row" role="group" aria-label="What clicking a cell does">
+        <button type="button" class="mode-btn" id="mode-cells" aria-pressed="true">Cut cells</button>
+        <button type="button" class="mode-btn" id="mode-endpoints" aria-pressed="false">Pick start / end</button>
+      </div>
 
       <div class="dims-row">
         <div class="stepper">
@@ -440,14 +478,18 @@
         </div>
       </div>
 
-      <div class="btn-row">
+      <div class="btn-row" id="cells-btn-row">
         <button type="button" class="btn" id="btn-clear">Clear cuts</button>
         <button type="button" class="btn" id="btn-randomize">Cut some holes</button>
+      </div>
+      <div class="btn-row" id="endpoints-btn-row" style="display:none;">
+        <button type="button" class="btn" id="btn-clear-endpoints">Clear start / end</button>
       </div>
 
       <div class="grid-shell">
         <div class="grid-svg-wrap"><svg class="gridsvg" id="grid-svg" role="group" aria-label="Editable grid"></svg></div>
         <div class="grid-note" id="grid-note"></div>
+        <div class="grid-note" id="endpoints-note" style="display:none;"></div>
       </div>
     </section>
 
@@ -456,7 +498,7 @@
       <p class="card-sub" id="results-sub">Recomputes automatically whenever the grid changes.</p>
 
       <div class="stat">
-        <div class="stat-label"><span class="sw path"></span>Hamiltonian paths</div>
+        <div class="stat-label"><span class="sw path"></span><span id="paths-label">Hamiltonian paths</span></div>
         <div class="stat-value path tnum mono" id="paths-value">&mdash;</div>
       </div>
       <div class="stat">
@@ -549,6 +591,7 @@
 /* ============================== Worker core (DP + search) ============================== */
 const WORKER_SRC = String.raw`
 const EMPTY = 0, OPEN = 1, CLOSE = 2, LONE = 3;
+const EMPTY_SET = new Set();
 
 function isOpen(grid, r, c) {
   return r >= 0 && r < grid.rows && c >= 0 && c < grid.cols && !grid.blocked.has(r + "," + c);
@@ -581,15 +624,16 @@ function restIsEmpty(combined, c) {
 function build(nc, c, downOut) {
   return nc.slice(0, c).concat([downOut], nc.slice(c + 2));
 }
-function* transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep) {
+function* transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq) {
   const leftIn = combined[c], upIn = combined[c + 1];
   if (isBlocked) {
     if (leftIn !== EMPTY || upIn !== EMPTY) return;
     yield ["cont", build(combined.slice(), c, EMPTY), EMPTY, ep];
     return;
   }
+  const forced = endpointReq === "forced";
   if (leftIn === EMPTY && upIn === EMPTY) {
-    if (hasRight && hasDown) yield ["cont", build(combined.slice(), c, OPEN), CLOSE, ep];
+    if (!forced && hasRight && hasDown) yield ["cont", build(combined.slice(), c, OPEN), CLOSE, ep];
     if (allowLone && ep < maxEndpoints) {
       if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), LONE, ep + 1];
       if (hasDown) yield ["cont", build(combined.slice(), c, LONE), EMPTY, ep + 1];
@@ -600,20 +644,26 @@ function* transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLo
     const x = leftIn || upIn;
     const posX = leftIn !== EMPTY ? c : c + 1;
     if (x === OPEN || x === CLOSE) {
-      if (hasDown) yield ["cont", build(combined.slice(), c, x), EMPTY, ep];
-      if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), x, ep];
+      if (!forced) {
+        if (hasDown) yield ["cont", build(combined.slice(), c, x), EMPTY, ep];
+        if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), x, ep];
+      }
       if (allowLone && ep < maxEndpoints) {
         const nc = combined.slice();
         nc[findPartner(nc, posX)] = LONE;
         yield ["cont", build(nc, c, EMPTY), EMPTY, ep + 1];
       }
     } else {
-      if (hasDown) yield ["cont", build(combined.slice(), c, LONE), EMPTY, ep];
-      if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), LONE, ep];
+      if (!forced) {
+        if (hasDown) yield ["cont", build(combined.slice(), c, LONE), EMPTY, ep];
+        if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), LONE, ep];
+      }
       if (allowLone && isLast && ep + 1 === maxEndpoints && restIsEmpty(combined, c)) yield ["sol"];
     }
     return;
   }
+  // Both incoming nonzero forces degree 2 -- invalid at a designated cell.
+  if (forced) return;
   if (leftIn === LONE && upIn === LONE) {
     if (isLast && restIsEmpty(combined, c)) yield ["sol"];
     return;
@@ -638,14 +688,15 @@ function* transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLo
 }
 function keyOf(profile, left, ep) { return profile.join(",") + "|" + left + "|" + ep; }
 
-function countStructures(grid, mode) {
+function countStructures(grid, mode, designated) {
+  designated = designated || EMPTY_SET;
   const R = grid.rows, C = grid.cols;
   const openMask = [];
   for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push(isOpen(grid, r, c)); openMask.push(row); }
   let numOpen = 0;
   for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) numOpen++;
   if (numOpen === 0) return 0n;
-  if (numOpen === 1) return mode === "path" ? 1n : 0n;
+  if (numOpen === 1) return mode === "path" && designated.size <= 1 ? 1n : 0n;
   if (mode === "cycle") {
     let black = 0;
     for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c] && (r + c) % 2 === 0) black++;
@@ -664,13 +715,14 @@ function countStructures(grid, mode) {
       const hasRight = c < C - 1;
       const isBlocked = !openMask[r][c];
       const isLast = (r * C + c) === lastOpen;
+      const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
       const nextStates = new Map();
       for (const [key, ways] of states) {
         const bar = key.indexOf("|"), bar2 = key.indexOf("|", bar + 1);
         const profStr = key.slice(0, bar), left = Number(key.slice(bar + 1, bar2)), ep = Number(key.slice(bar2 + 1));
         const profile = profStr.split(",").map(Number);
         const combined = profile.slice(0, c).concat([left], profile.slice(c));
-        for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep)) {
+        for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
           if (outcome[0] === "sol") { answer += ways; }
           else {
             const k = keyOf(outcome[1], outcome[2], outcome[3]);
@@ -694,6 +746,13 @@ function bestOrientation(rows, cols, blockedArr) {
   return { rows, cols, blocked: new Set(blockedArr.map(([r, c]) => r + "," + c)) };
 }
 
+function orientDesignated(designatedArr, transposed) {
+  if (!designatedArr || designatedArr.length === 0) return EMPTY_SET;
+  const s = new Set();
+  for (const [r, c] of designatedArr) s.add(transposed ? c + "," + r : r + "," + c);
+  return s;
+}
+
 function parseKey(key) {
   const bar = key.indexOf("|"), bar2 = key.indexOf("|", bar + 1);
   const profile = key.slice(0, bar).split(",").map(Number);
@@ -709,9 +768,10 @@ function parseKey(key) {
    unrank() walk straight to the k-th solution by comparing k against each
    branch's completion count, the same way you'd find the page containing
    item k in a stack of variously-sized page groups. */
-function buildSolutionIndex(rows, cols, blockedArr, mode) {
+function buildSolutionIndex(rows, cols, blockedArr, mode, designatedArr) {
   const transposed = cols > rows;
   const grid = bestOrientation(rows, cols, blockedArr);
+  const designated = orientDesignated(designatedArr, transposed);
   const R = grid.rows, C = grid.cols;
   const openMask = [];
   for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push(isOpen(grid, r, c)); openMask.push(row); }
@@ -722,7 +782,7 @@ function buildSolutionIndex(rows, cols, blockedArr, mode) {
   const maxEndpoints = allowLone ? 2 : 0;
 
   if (numOpen === 0) return null;
-  if (numOpen === 1) return mode === "path" ? { total: 1n, trivial: true, R, C, transposed } : null;
+  if (numOpen === 1) return mode === "path" && designated.size <= 1 ? { total: 1n, trivial: true, R, C, transposed } : null;
   if (mode === "cycle") {
     let black = 0;
     for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c] && (r + c) % 2 === 0) black++;
@@ -740,11 +800,12 @@ function buildSolutionIndex(rows, cols, blockedArr, mode) {
     const hasRight = c < C - 1, hasDown = r < R - 1;
     const isBlocked = !openMask[r][c];
     const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
     const next = new Set();
     for (const key of reachablePerStep[t]) {
       const { profile, left, ep } = parseKey(key);
       const combined = profile.slice(0, c).concat([left], profile.slice(c));
-      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep)) {
+      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
         if (outcome[0] === "cont") next.add(keyOf(outcome[1], outcome[2], outcome[3]));
       }
     }
@@ -758,12 +819,13 @@ function buildSolutionIndex(rows, cols, blockedArr, mode) {
     const hasRight = c < C - 1, hasDown = r < R - 1;
     const isBlocked = !openMask[r][c];
     const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
     const map = new Map();
     for (const key of reachablePerStep[t]) {
       const { profile, left, ep } = parseKey(key);
       const combined = profile.slice(0, c).concat([left], profile.slice(c));
       let sum = 0n;
-      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep)) {
+      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
         if (outcome[0] === "sol") sum += 1n;
         else sum += suffixPerStep[t + 1].get(keyOf(outcome[1], outcome[2], outcome[3])) || 0n;
       }
@@ -775,12 +837,12 @@ function buildSolutionIndex(rows, cols, blockedArr, mode) {
   const initKey = keyOf(new Array(C).fill(EMPTY), EMPTY, 0);
   const total = suffixPerStep[0].get(initKey) || 0n;
   if (total === 0n) return null;
-  return { total, R, C, openMask, lastOpen, allowLone, maxEndpoints, suffixPerStep, totalSteps, transposed };
+  return { total, R, C, openMask, lastOpen, allowLone, maxEndpoints, suffixPerStep, totalSteps, transposed, designated };
 }
 
 function unrankSolution(index, idx) {
   if (idx.trivial) return [[0, 0]];
-  const { R, C, openMask, lastOpen, allowLone, maxEndpoints, suffixPerStep, totalSteps } = idx;
+  const { R, C, openMask, lastOpen, allowLone, maxEndpoints, suffixPerStep, totalSteps, designated } = idx;
   const edges = [];
   for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push({ up: false, down: false, left: false, right: false }); edges.push(row); }
   let profile = new Array(C).fill(EMPTY), left = EMPTY, ep = 0;
@@ -790,10 +852,11 @@ function unrankSolution(index, idx) {
     const hasRight = c < C - 1, hasDown = r < R - 1;
     const isBlocked = !openMask[r][c];
     const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
     const combined = profile.slice(0, c).concat([left], profile.slice(c));
     const upIn = combined[c + 1], leftIn = combined[c];
     let chosen = null;
-    for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep)) {
+    for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
       const blockSize = outcome[0] === "sol" ? 1n : (suffixPerStep[t + 1].get(keyOf(outcome[1], outcome[2], outcome[3])) || 0n);
       if (remaining < blockSize) { chosen = outcome; break; }
       remaining -= blockSize;
@@ -868,13 +931,15 @@ class BitSet {
   has(i) { return (this.words[i >> 5] & (1 << (i & 31))) !== 0; }
   static fromBit(n, i) { const b = new BitSet(n); b.set(i); return b; }
 }
-function findOneSolution(rows, cols, blockedArr, wantCycle, seed) {
+function findOneSolution(rows, cols, blockedArr, wantCycle, seed, forceStart) {
   const blocked = new Set(blockedArr.map(([r, c]) => r + "," + c));
   const grid = { rows, cols, blocked };
   const cells = [], index = new Map();
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (!blocked.has(r + "," + c)) { index.set(r + "," + c, cells.length); cells.push([r, c]); }
   const n = cells.length;
   if (n === 0) return null;
+  const forceStartIdx = forceStart ? index.get(forceStart[0] + "," + forceStart[1]) : undefined;
+  if (forceStart && forceStartIdx === undefined) return null;
   if (n === 1) return wantCycle ? null : [cells[0]];
   if (wantCycle && n < 4) return null;
   const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];
@@ -884,8 +949,13 @@ function findOneSolution(rows, cols, blockedArr, wantCycle, seed) {
     return out;
   });
   const rng = mulberry32(seed >>> 0);
-  const startOrder = [...Array(n).keys()];
-  shuffleInPlace(startOrder, rng);
+  let startOrder;
+  if (forceStartIdx !== undefined) {
+    startOrder = [forceStartIdx];
+  } else {
+    startOrder = [...Array(n).keys()];
+    shuffleInPlace(startOrder, rng);
+  }
   function remainingConnected(visited, frm) {
     let remainingCount = 0;
     for (let i = 0; i < n; i++) if (!visited.has(i)) remainingCount++;
@@ -934,38 +1004,87 @@ function findOneSolution(rows, cols, blockedArr, wantCycle, seed) {
   return null;
 }
 
-const navCache = new Map(); // "rows|cols|blockedSorted|mode" -> index object (or null)
+const navCache = new Map(); // "rows|cols|blockedSorted|mode|designatedSorted" -> index object (or null)
+
+function randomBigIntBelow(total) {
+  const bits = total.toString(2).length;
+  let r;
+  do {
+    r = 0n;
+    let remaining = bits;
+    while (remaining > 0) {
+      const take = Math.min(30, remaining);
+      r = (r << BigInt(take)) | BigInt(Math.floor(Math.random() * (1 << take)));
+      remaining -= take;
+    }
+  } while (r >= total);
+  return r;
+}
+
+function designatedCacheKey(designated) {
+  if (!designated || designated.length === 0) return "";
+  return designated.map((p) => p.join(",")).sort().join(";");
+}
+
+// A cycle has no true start, so browsing it always visits the same cells --
+// this just rotates the returned list to *display* it starting from the
+// chosen cell, purely cosmetic.
+function rotateCycleToStart(cells, startCell) {
+  if (!startCell) return cells;
+  const i = cells.findIndex(([r, c]) => r === startCell[0] && c === startCell[1]);
+  if (i <= 0) return cells;
+  return cells.slice(i).concat(cells.slice(0, i));
+}
 
 self.onmessage = function (e) {
-  const { id, type, rows, cols, blocked, mode, seed, index } = e.data;
+  const { id, type, rows, cols, blocked, mode, seed, index, startCell, endCell, designated } = e.data;
   try {
     if (type === "count") {
       const t0 = performance.now();
       const cycles = countStructures(bestOrientation(rows, cols, blocked), "cycle");
       self.postMessage({ id, type: "count-partial", metric: "cycles", value: cycles.toString(), ms: performance.now() - t0 });
       const t1 = performance.now();
-      const paths = countStructures(bestOrientation(rows, cols, blocked), "path");
+      const paths = countStructures(bestOrientation(rows, cols, blocked), "path", orientDesignated(designated, cols > rows));
       self.postMessage({ id, type: "count-partial", metric: "paths", value: paths.toString(), ms: performance.now() - t1 });
       self.postMessage({ id, type: "count-done" });
     } else if (type === "search") {
-      const result = findOneSolution(rows, cols, blocked, mode === "cycle", seed);
+      // Path mode with BOTH ends fixed always goes through "nav" instead
+      // (see main-thread orchestration) -- the heuristic search here is
+      // only reliable with at most one forced cell.
+      let result;
+      if (mode === "cycle") {
+        result = findOneSolution(rows, cols, blocked, true, seed, startCell || null);
+      } else if (startCell) {
+        result = findOneSolution(rows, cols, blocked, false, seed, startCell);
+      } else if (endCell) {
+        result = findOneSolution(rows, cols, blocked, false, seed, endCell);
+        if (result) result = result.slice().reverse();
+      } else {
+        result = findOneSolution(rows, cols, blocked, false, seed, null);
+      }
       self.postMessage({ id, type: "search-done", mode, result });
     } else if (type === "nav") {
-      const cacheKey = rows + "|" + cols + "|" + blocked.map((p) => p.join(",")).sort().join(";") + "|" + mode;
+      const cacheKey = rows + "|" + cols + "|" + blocked.map((p) => p.join(",")).sort().join(";") + "|" + mode + "|" + designatedCacheKey(designated);
       let idx = navCache.get(cacheKey);
       if (idx === undefined) {
         self.postMessage({ id, type: "nav-building" });
-        idx = buildSolutionIndex(rows, cols, blocked, mode);
+        idx = buildSolutionIndex(rows, cols, blocked, mode, designated);
         navCache.set(cacheKey, idx);
       }
       if (!idx) {
         self.postMessage({ id, type: "nav-empty", mode });
         return;
       }
-      let i = BigInt(index);
-      if (i < 0n) i = 0n;
-      if (i >= idx.total) i = idx.total - 1n;
-      const cells = unrankSolution(i, idx);
+      let i;
+      if (index === "random") {
+        i = randomBigIntBelow(idx.total);
+      } else {
+        i = BigInt(index);
+        if (i < 0n) i = 0n;
+        if (i >= idx.total) i = idx.total - 1n;
+      }
+      let cells = unrankSolution(i, idx);
+      if (mode === "cycle" && startCell) cells = rotateCycleToStart(cells, startCell);
       self.postMessage({ id, type: "nav-result", mode, index: i.toString(), total: idx.total.toString(), cells });
     }
   } catch (err) {
@@ -1000,6 +1119,9 @@ const state = {
   route: null, // { cells: [[r,c],...], mode: "path"|"cycle" }
   browseMode: null, // null | "path" | "cycle" -- which mode the nav toolbar is showing
   browseTotal: { path: null, cycle: null }, // BigInt totals once known, per mode
+  editMode: "cells", // "cells" | "endpoints"
+  startCell: null, // [r,c] or null
+  endCell: null, // [r,c] or null (path mode only; ignored for cycles)
 };
 
 const MIN_N = 2, MAX_N = 10;
@@ -1033,7 +1155,34 @@ const els = {
   navRandomBtn: document.getElementById("nav-random-btn"),
   navStatus: document.getElementById("nav-status"),
   tooltip: document.getElementById("tooltip"),
+  modeCellsBtn: document.getElementById("mode-cells"),
+  modeEndpointsBtn: document.getElementById("mode-endpoints"),
+  cellsBtnRow: document.getElementById("cells-btn-row"),
+  endpointsBtnRow: document.getElementById("endpoints-btn-row"),
+  clearEndpointsBtn: document.getElementById("btn-clear-endpoints"),
+  gridCardSub: document.getElementById("grid-card-sub"),
+  endpointsNote: document.getElementById("endpoints-note"),
+  resultsSub: document.getElementById("results-sub"),
+  pathsLabel: document.getElementById("paths-label"),
 };
+
+function fmtCell([r, c]) { return `(${r + 1}, ${c + 1})`; }
+
+/* Describes the current start/end constraint in prose, for the given mode. */
+function constraintPhrase(mode) {
+  if (mode === "cycle") return state.startCell ? ` starting at ${fmtCell(state.startCell)}` : "";
+  if (state.startCell && state.endCell) return ` from ${fmtCell(state.startCell)} to ${fmtCell(state.endCell)}`;
+  if (state.startCell) return ` starting at ${fmtCell(state.startCell)}`;
+  if (state.endCell) return ` ending at ${fmtCell(state.endCell)}`;
+  return "";
+}
+
+function designatedCellsArray() {
+  const arr = [];
+  if (state.startCell) arr.push(state.startCell);
+  if (state.endCell) arr.push(state.endCell);
+  return arr;
+}
 
 function clampDim(n) { return Math.max(MIN_N, Math.min(MAX_N, n)); }
 
@@ -1044,6 +1193,31 @@ function pruneBlockedToBounds() {
     if (r < state.rows && c < state.cols) next.add(key);
   }
   state.blocked = next;
+}
+
+function cellIsOpen(r, c) {
+  return r >= 0 && r < state.rows && c >= 0 && c < state.cols && !state.blocked.has(r + "," + c);
+}
+
+function pruneEndpointsToOpenCells() {
+  if (state.startCell && !cellIsOpen(state.startCell[0], state.startCell[1])) state.startCell = null;
+  if (state.endCell && !cellIsOpen(state.endCell[0], state.endCell[1])) state.endCell = null;
+}
+
+function sameCell(a, b) {
+  return !!a && !!b && a[0] === b[0] && a[1] === b[1];
+}
+
+function updateEndpointsNote() {
+  if (!state.startCell && !state.endCell) {
+    els.endpointsNote.style.display = "none";
+    return;
+  }
+  els.endpointsNote.style.display = "";
+  const parts = [];
+  if (state.startCell) parts.push(`<span class="chip"><span class="sw" style="background:var(--accent-path)"></span>start (${state.startCell[0] + 1}, ${state.startCell[1] + 1})</span>`);
+  if (state.endCell) parts.push(`<span class="chip"><span class="sw" style="background:var(--accent-cycle)"></span>end (${state.endCell[0] + 1}, ${state.endCell[1] + 1})</span>`);
+  els.endpointsNote.innerHTML = parts.join(" ");
 }
 
 /* ---------------- grid rendering ---------------- */
@@ -1070,11 +1244,15 @@ function renderGrid() {
       rect.setAttribute("y", r * CELL);
       rect.setAttribute("width", CELL);
       rect.setAttribute("height", CELL);
-      rect.setAttribute("class", "cell" + (isBlocked ? " blocked" : ""));
+      const pickable = state.editMode === "endpoints" && !isBlocked;
+      rect.setAttribute("class", "cell" + (isBlocked ? " blocked" : "") + (pickable ? " pickable" : ""));
       rect.setAttribute("tabindex", "0");
       rect.setAttribute("role", "button");
       rect.setAttribute("aria-pressed", String(isBlocked));
-      rect.setAttribute("aria-label", `Cell row ${r + 1}, column ${c + 1}, ${isBlocked ? "cut out" : "open"}`);
+      const label = state.editMode === "endpoints"
+        ? `Cell row ${r + 1}, column ${c + 1}${sameCell([r, c], state.startCell) ? ", start" : ""}${sameCell([r, c], state.endCell) ? ", end" : ""}`
+        : `Cell row ${r + 1}, column ${c + 1}, ${isBlocked ? "cut out" : "open"}`;
+      rect.setAttribute("aria-label", label);
       rect.dataset.r = r;
       rect.dataset.c = c;
       rect.addEventListener("click", onCellToggle);
@@ -1096,7 +1274,47 @@ function renderGrid() {
     }
   }
 
+  drawEndpointMarkers(svg, ns);
   if (state.route) drawRoute(svg, ns);
+}
+
+function drawEndpointMarkers(svg, ns) {
+  if (!state.startCell && !state.endCell) return;
+  const group = document.createElementNS(ns, "g");
+  group.setAttribute("class", "endpoint-marker");
+  svg.appendChild(group);
+  const r = Math.max(7, CELL * 0.2);
+  if (state.startCell) {
+    const [row, col] = state.startCell;
+    const cx = col * CELL + r + 3, cy = row * CELL + r + 3;
+    const circ = document.createElementNS(ns, "circle");
+    circ.setAttribute("cx", cx); circ.setAttribute("cy", cy); circ.setAttribute("r", r);
+    circ.setAttribute("class", "glyph-start");
+    circ.setAttribute("stroke", "var(--accent-path)");
+    circ.setAttribute("fill", "var(--surface-2)");
+    group.appendChild(circ);
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", cx); t.setAttribute("y", cx === cy ? cy + 1 : cy + 1);
+    t.setAttribute("fill", "var(--accent-path)");
+    t.textContent = "S";
+    group.appendChild(t);
+  }
+  if (state.endCell) {
+    const [row, col] = state.endCell;
+    const cx = col * CELL + CELL - r - 3, cy = row * CELL + r + 3;
+    const sq = document.createElementNS(ns, "rect");
+    sq.setAttribute("x", cx - r); sq.setAttribute("y", cy - r);
+    sq.setAttribute("width", r * 2); sq.setAttribute("height", r * 2);
+    sq.setAttribute("class", "glyph-end");
+    sq.setAttribute("stroke", "var(--accent-cycle)");
+    sq.setAttribute("fill", "var(--surface-2)");
+    group.appendChild(sq);
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", cx); t.setAttribute("y", cy + 1);
+    t.setAttribute("fill", "var(--accent-cycle)");
+    t.textContent = "E";
+    group.appendChild(t);
+  }
 }
 
 function hatchLines(x0, y0, size) {
@@ -1178,12 +1396,29 @@ function resetRoute() {
 
 function onCellToggle(e) {
   const r = Number(e.currentTarget.dataset.r), c = Number(e.currentTarget.dataset.c);
+
+  if (state.editMode === "endpoints") {
+    if (state.blocked.has(r + "," + c)) return; // can't pick a cut-out cell
+    if (sameCell([r, c], state.startCell)) state.startCell = null;
+    else if (sameCell([r, c], state.endCell)) state.endCell = null;
+    else if (!state.startCell) state.startCell = [r, c];
+    else if (!state.endCell && !sameCell([r, c], state.startCell)) state.endCell = [r, c];
+    else state.endCell = [r, c]; // both already set -- replace end with the new pick
+    resetRoute();
+    renderGrid();
+    updateEndpointsNote();
+    scheduleCompute();
+    return;
+  }
+
   const key = r + "," + c;
   if (state.blocked.has(key)) state.blocked.delete(key);
   else state.blocked.add(key);
+  pruneEndpointsToOpenCells();
   resetRoute();
   renderGrid();
   updateNote();
+  updateEndpointsNote();
   scheduleCompute();
 }
 
@@ -1204,9 +1439,11 @@ function setDims(rows, cols) {
   els.rowsVal.textContent = state.rows;
   els.colsVal.textContent = state.cols;
   pruneBlockedToBounds();
+  pruneEndpointsToOpenCells();
   resetRoute();
   renderGrid();
   updateNote();
+  updateEndpointsNote();
   updateStepperDisabled();
   renderChart();
   scheduleCompute();
@@ -1225,9 +1462,11 @@ els.colsInc.addEventListener("click", () => setDims(state.rows, state.cols + 1))
 
 els.clearBtn.addEventListener("click", () => {
   state.blocked = new Set();
+  pruneEndpointsToOpenCells();
   resetRoute();
   renderGrid();
   updateNote();
+  updateEndpointsNote();
   scheduleCompute();
 });
 
@@ -1238,9 +1477,35 @@ els.randomizeBtn.addEventListener("click", () => {
   for (let r = 0; r < state.rows; r++) for (let c = 0; c < state.cols; c++) all.push(r + "," + c);
   for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
   state.blocked = new Set(all.slice(0, Math.min(targetHoles, total - 1)));
+  pruneEndpointsToOpenCells();
   resetRoute();
   renderGrid();
   updateNote();
+  updateEndpointsNote();
+  scheduleCompute();
+});
+
+/* ---------------- edit mode + start/end picking ---------------- */
+function setEditMode(mode) {
+  state.editMode = mode;
+  els.modeCellsBtn.setAttribute("aria-pressed", String(mode === "cells"));
+  els.modeEndpointsBtn.setAttribute("aria-pressed", String(mode === "endpoints"));
+  els.cellsBtnRow.style.display = mode === "cells" ? "" : "none";
+  els.endpointsBtnRow.style.display = mode === "endpoints" ? "" : "none";
+  els.gridCardSub.textContent = mode === "endpoints"
+    ? "Click a cell to set it as start, then click another to set the end. Click a set cell again to clear it."
+    : "Click any cell to cut it out of the grid. Routes weave around the gaps.";
+  renderGrid();
+}
+els.modeCellsBtn.addEventListener("click", () => setEditMode("cells"));
+els.modeEndpointsBtn.addEventListener("click", () => setEditMode("endpoints"));
+
+els.clearEndpointsBtn.addEventListener("click", () => {
+  state.startCell = null;
+  state.endCell = null;
+  resetRoute();
+  renderGrid();
+  updateEndpointsNote();
   scheduleCompute();
 });
 
@@ -1271,6 +1536,7 @@ function runCompute() {
     els.progressNote.textContent = `counting… ${secs}s`;
   }, 100);
   els.progressNote.textContent = "counting…";
+  els.pathsLabel.textContent = "Hamiltonian paths" + constraintPhrase("path");
 
   worker.postMessage({
     id,
@@ -1278,6 +1544,7 @@ function runCompute() {
     rows: state.rows,
     cols: state.cols,
     blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
+    designated: designatedCellsArray(),
   });
 }
 
@@ -1314,12 +1581,12 @@ function handleWorkerMessage(e) {
       state.browseMode = null;
       els.navRow.style.display = "none";
       els.navStatus.style.display = "none";
-      els.routeCaption.textContent = `Showing a random ${msg.mode}.`;
+      els.routeCaption.textContent = `Showing a random ${msg.mode}${constraintPhrase(msg.mode)}.`;
       renderGrid();
     } else {
       resetRoute();
       renderGrid();
-      els.gridNote.insertAdjacentHTML("beforeend", ` <span class="chip warn">no ${msg.mode === "cycle" ? "cycle" : "path"} exists for this shape</span>`);
+      els.gridNote.insertAdjacentHTML("beforeend", ` <span class="chip warn">no ${msg.mode === "cycle" ? "cycle" : "path"}${constraintPhrase(msg.mode)} exists</span>`);
     }
     setSearchButtonsEnabled(true);
   } else if (msg.type === "nav-building") {
@@ -1330,7 +1597,7 @@ function handleWorkerMessage(e) {
     setNavControlsEnabled(false);
   } else if (msg.type === "nav-empty") {
     els.navStatus.style.display = "";
-    els.navStatus.textContent = `no ${msg.mode === "cycle" ? "cycles" : "paths"} exist for this shape — nothing to browse.`;
+    els.navStatus.textContent = `no ${msg.mode === "cycle" ? "cycles" : "paths"}${constraintPhrase(msg.mode)} exist — nothing to browse.`;
     els.navRow.style.display = "none";
     setNavControlsEnabled(true);
   } else if (msg.type === "nav-result") {
@@ -1342,7 +1609,7 @@ function handleWorkerMessage(e) {
     els.navStatus.style.display = "none";
     els.navRow.style.display = "";
     els.routeCaption.textContent = "";
-    els.navReadout.textContent = `Solution ${fmtBig((index + 1n).toString())} of ${fmtBig(total.toString())}`;
+    els.navReadout.textContent = `Solution ${fmtBig((index + 1n).toString())} of ${fmtBig(total.toString())}${constraintPhrase(msg.mode)}`;
     els.navJumpInput.value = "";
     els.navJumpInput.placeholder = fmtBig((index + 1n).toString());
     setNavControlsEnabled(true);
@@ -1374,6 +1641,15 @@ function setNavControlsEnabled(on) {
 }
 
 function requestExample(mode) {
+  // With both a start AND an end fixed, the heuristic search isn't
+  // reliable enough to trust (verified against the exact DP -- see
+  // hamiltonian-endpoints validation) -- route through the exact indexed
+  // system instead, picking a uniform random valid solution. Below that
+  // (0 or 1 fixed cell), the fast heuristic is proven reliable.
+  if (mode === "path" && state.startCell && state.endCell) {
+    requestNav("path", "random");
+    return;
+  }
   spawnWorkerIfNeeded();
   currentRequestId += 1;
   const id = currentRequestId;
@@ -1386,6 +1662,8 @@ function requestExample(mode) {
     blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
     mode,
     seed: Math.floor(Math.random() * 2 ** 31),
+    startCell: state.startCell,
+    endCell: mode === "path" ? state.endCell : null,
   });
 }
 function spawnWorkerIfNeeded() {
@@ -1429,6 +1707,8 @@ function requestNav(mode, indexStr) {
     blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
     mode,
     index: indexStr,
+    designated: mode === "path" ? designatedCellsArray() : [],
+    startCell: mode === "cycle" ? state.startCell : null,
   });
 }
 
