@@ -122,6 +122,15 @@ Python implementation's outputs, including the full 10x10 case), running in
 a Web Worker so the page stays responsive during a multi-second count. No
 build step or server needed — just open the file.
 
+It also supports **browsing solutions by number** instead of only random
+ones: "Browse paths"/"Browse cycles" shows "Solution *k* of *total*" with
+Prev/Next and a jump-to-# field. This extends the DP into an *unranking*
+algorithm — given index *k*, it reconstructs the exact *k*-th solution
+directly (via a one-time forward+backward pass building per-step
+completion counts), rather than generating and discarding the ones before
+it. Exhaustively verified against brute-force enumeration (every index,
+not a sample) across dozens of grid shapes before shipping.
+
 ## Project layout
 
 ```

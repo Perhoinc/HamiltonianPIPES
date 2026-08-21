@@ -320,6 +320,25 @@
   .compute-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
   .example-row { display: flex; gap: 8px; margin: 20px 0 6px; flex-wrap: wrap; }
+  .route-caption { font-size: 12px; color: var(--muted); min-height: 16px; }
+
+  .browse-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+  .browse-label {
+    font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 10px;
+  }
+  .nav-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .nav-btn { width: 30px; padding: 7px 0; text-align: center; font-size: 15px; line-height: 1; }
+  .nav-readout {
+    font-size: 12.5px; color: var(--ink-soft); min-width: 128px; text-align: center;
+    padding: 0 4px;
+  }
+  .nav-jump { display: flex; gap: 4px; margin: 0 0 0 6px; }
+  .nav-input {
+    width: 92px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--surface-2); color: var(--ink); font-size: 12.5px;
+  }
+  .nav-input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
   .method-note {
     margin-top: 20px;
     padding-top: 16px;
@@ -452,11 +471,31 @@
       <div class="compute-note" id="timing-note" style="display:none;"></div>
 
       <div class="example-row">
-        <button type="button" class="btn accent-path" id="btn-show-path">Trace an example path</button>
-        <button type="button" class="btn accent-cycle" id="btn-show-cycle">Trace an example cycle</button>
+        <button type="button" class="btn accent-path" id="btn-show-path">Random path</button>
+        <button type="button" class="btn accent-cycle" id="btn-show-cycle">Random cycle</button>
+      </div>
+      <div class="route-caption" id="route-caption"></div>
+
+      <div class="browse-block">
+        <div class="browse-label">Browse solutions by number</div>
+        <div class="example-row">
+          <button type="button" class="btn accent-path" id="btn-browse-path">Browse paths</button>
+          <button type="button" class="btn accent-cycle" id="btn-browse-cycle">Browse cycles</button>
+        </div>
+        <div class="nav-row" id="nav-row" style="display:none;">
+          <button type="button" class="btn nav-btn" id="nav-prev" aria-label="Previous solution">&lsaquo;</button>
+          <span class="nav-readout mono tnum" id="nav-readout">&mdash;</span>
+          <button type="button" class="btn nav-btn" id="nav-next" aria-label="Next solution">&rsaquo;</button>
+          <form id="nav-jump-form" class="nav-jump">
+            <input type="text" inputmode="numeric" autocomplete="off" class="nav-input mono tnum" id="nav-jump-input" aria-label="Jump to solution number">
+            <button type="submit" class="btn">Go</button>
+          </form>
+          <button type="button" class="btn" id="nav-random-btn">Random</button>
+        </div>
+        <div class="compute-note" id="nav-status" style="display:none;"></div>
       </div>
 
-      <p class="method-note">Counted exactly with a "broken-profile" dynamic program that sweeps the grid once, tracking which cells still have a dangling connection — no route is ever built and thrown away, so it stays fast even when there are trillions of them. Cross-checked against brute-force enumeration and against <a href="https://oeis.org/A096969" style="color:inherit" target="_blank" rel="noopener">OEIS A096969</a> / <a href="https://oeis.org/A003763" style="color:inherit" target="_blank" rel="noopener">A003763</a>.</p>
+      <p class="method-note">Counted exactly with a "broken-profile" dynamic program that sweeps the grid once, tracking which cells still have a dangling connection — no route is ever built and thrown away, so it stays fast even when there are trillions of them. Browsing by number works the same way, in reverse: it can reconstruct the exact k-th solution directly, without generating the ones before it. Cross-checked against brute-force enumeration and against <a href="https://oeis.org/A096969" style="color:inherit" target="_blank" rel="noopener">OEIS A096969</a> / <a href="https://oeis.org/A003763" style="color:inherit" target="_blank" rel="noopener">A003763</a>.</p>
     </section>
   </div>
 
@@ -655,6 +694,160 @@ function bestOrientation(rows, cols, blockedArr) {
   return { rows, cols, blocked: new Set(blockedArr.map(([r, c]) => r + "," + c)) };
 }
 
+function parseKey(key) {
+  const bar = key.indexOf("|"), bar2 = key.indexOf("|", bar + 1);
+  const profile = key.slice(0, bar).split(",").map(Number);
+  const left = Number(key.slice(bar + 1, bar2));
+  const ep = Number(key.slice(bar2 + 1));
+  return { profile, left, ep };
+}
+
+/* ---- indexed solution browsing: build once, then unrank(k) is instant ----
+   Forward pass keeps every step's reachable-state set (not just the last,
+   like countStructures does); a backward pass turns that into, for every
+   reachable state, "how many completions exist from here" -- which lets
+   unrank() walk straight to the k-th solution by comparing k against each
+   branch's completion count, the same way you'd find the page containing
+   item k in a stack of variously-sized page groups. */
+function buildSolutionIndex(rows, cols, blockedArr, mode) {
+  const transposed = cols > rows;
+  const grid = bestOrientation(rows, cols, blockedArr);
+  const R = grid.rows, C = grid.cols;
+  const openMask = [];
+  for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push(isOpen(grid, r, c)); openMask.push(row); }
+  let numOpen = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) numOpen++;
+
+  const allowLone = mode === "path";
+  const maxEndpoints = allowLone ? 2 : 0;
+
+  if (numOpen === 0) return null;
+  if (numOpen === 1) return mode === "path" ? { total: 1n, trivial: true, R, C, transposed } : null;
+  if (mode === "cycle") {
+    let black = 0;
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c] && (r + c) % 2 === 0) black++;
+    if (black !== numOpen - black) return null;
+  }
+
+  let lastOpen = null;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) lastOpen = r * C + c;
+
+  const totalSteps = R * C;
+  const reachablePerStep = new Array(totalSteps + 1);
+  reachablePerStep[0] = new Set([keyOf(new Array(C).fill(EMPTY), EMPTY, 0)]);
+  for (let t = 0; t < totalSteps; t++) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const next = new Set();
+    for (const key of reachablePerStep[t]) {
+      const { profile, left, ep } = parseKey(key);
+      const combined = profile.slice(0, c).concat([left], profile.slice(c));
+      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep)) {
+        if (outcome[0] === "cont") next.add(keyOf(outcome[1], outcome[2], outcome[3]));
+      }
+    }
+    reachablePerStep[t + 1] = next;
+  }
+
+  const suffixPerStep = new Array(totalSteps + 1);
+  suffixPerStep[totalSteps] = new Map();
+  for (let t = totalSteps - 1; t >= 0; t--) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const map = new Map();
+    for (const key of reachablePerStep[t]) {
+      const { profile, left, ep } = parseKey(key);
+      const combined = profile.slice(0, c).concat([left], profile.slice(c));
+      let sum = 0n;
+      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep)) {
+        if (outcome[0] === "sol") sum += 1n;
+        else sum += suffixPerStep[t + 1].get(keyOf(outcome[1], outcome[2], outcome[3])) || 0n;
+      }
+      map.set(key, sum);
+    }
+    suffixPerStep[t] = map;
+  }
+
+  const initKey = keyOf(new Array(C).fill(EMPTY), EMPTY, 0);
+  const total = suffixPerStep[0].get(initKey) || 0n;
+  if (total === 0n) return null;
+  return { total, R, C, openMask, lastOpen, allowLone, maxEndpoints, suffixPerStep, totalSteps, transposed };
+}
+
+function unrankSolution(index, idx) {
+  if (idx.trivial) return [[0, 0]];
+  const { R, C, openMask, lastOpen, allowLone, maxEndpoints, suffixPerStep, totalSteps } = idx;
+  const edges = [];
+  for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push({ up: false, down: false, left: false, right: false }); edges.push(row); }
+  let profile = new Array(C).fill(EMPTY), left = EMPTY, ep = 0;
+  let remaining = index;
+  for (let t = 0; t < totalSteps; t++) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const combined = profile.slice(0, c).concat([left], profile.slice(c));
+    const upIn = combined[c + 1], leftIn = combined[c];
+    let chosen = null;
+    for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep)) {
+      const blockSize = outcome[0] === "sol" ? 1n : (suffixPerStep[t + 1].get(keyOf(outcome[1], outcome[2], outcome[3])) || 0n);
+      if (remaining < blockSize) { chosen = outcome; break; }
+      remaining -= blockSize;
+    }
+    if (!chosen) throw new Error("unrank: exhausted branches");
+    if (!isBlocked) {
+      const downOut = chosen[0] === "cont" ? chosen[1][c] : EMPTY;
+      const rightOut = chosen[0] === "cont" ? chosen[2] : EMPTY;
+      edges[r][c].up = upIn !== EMPTY;
+      edges[r][c].left = leftIn !== EMPTY;
+      edges[r][c].down = downOut !== EMPTY;
+      edges[r][c].right = rightOut !== EMPTY;
+    }
+    if (chosen[0] === "sol") break;
+    profile = chosen[1]; left = chosen[2]; ep = chosen[3];
+  }
+  return walkEdgesToPath(idx, edges);
+}
+
+function walkEdgesToPath(idx, edges) {
+  const { R, C, openMask, allowLone, transposed } = idx;
+  let start = null;
+  outer: for (let r = 0; r < R; r++) {
+    for (let c = 0; c < C; c++) {
+      if (!openMask[r][c]) continue;
+      const e = edges[r][c];
+      const deg = (e.up ? 1 : 0) + (e.down ? 1 : 0) + (e.left ? 1 : 0) + (e.right ? 1 : 0);
+      if (allowLone ? deg === 1 : true) { start = [r, c]; break outer; }
+    }
+  }
+  const path = [start];
+  const visited = new Set([start[0] + "," + start[1]]);
+  let cur = start, cameFrom = null;
+  while (true) {
+    const [r, c] = cur;
+    const e = edges[r][c];
+    const candidates = [];
+    if (e.up) candidates.push([r - 1, c]);
+    if (e.down) candidates.push([r + 1, c]);
+    if (e.left) candidates.push([r, c - 1]);
+    if (e.right) candidates.push([r, c + 1]);
+    let next = null;
+    for (const cand of candidates) {
+      if (cameFrom && cand[0] === cameFrom[0] && cand[1] === cameFrom[1]) continue;
+      next = cand; break;
+    }
+    if (next === null) break;
+    const nk = next[0] + "," + next[1];
+    if (visited.has(nk)) break;
+    path.push(next); visited.add(nk); cameFrom = cur; cur = next;
+  }
+  return path.map(([r, c]) => (transposed ? [c, r] : [r, c]));
+}
+
 /* ---- fast single-solution search (Warnsdorff + connectivity pruning) ---- */
 function mulberry32(seed) {
   let a = seed >>> 0;
@@ -741,8 +934,10 @@ function findOneSolution(rows, cols, blockedArr, wantCycle, seed) {
   return null;
 }
 
+const navCache = new Map(); // "rows|cols|blockedSorted|mode" -> index object (or null)
+
 self.onmessage = function (e) {
-  const { id, type, rows, cols, blocked, mode, seed } = e.data;
+  const { id, type, rows, cols, blocked, mode, seed, index } = e.data;
   try {
     if (type === "count") {
       const t0 = performance.now();
@@ -755,6 +950,23 @@ self.onmessage = function (e) {
     } else if (type === "search") {
       const result = findOneSolution(rows, cols, blocked, mode === "cycle", seed);
       self.postMessage({ id, type: "search-done", mode, result });
+    } else if (type === "nav") {
+      const cacheKey = rows + "|" + cols + "|" + blocked.map((p) => p.join(",")).sort().join(";") + "|" + mode;
+      let idx = navCache.get(cacheKey);
+      if (idx === undefined) {
+        self.postMessage({ id, type: "nav-building" });
+        idx = buildSolutionIndex(rows, cols, blocked, mode);
+        navCache.set(cacheKey, idx);
+      }
+      if (!idx) {
+        self.postMessage({ id, type: "nav-empty", mode });
+        return;
+      }
+      let i = BigInt(index);
+      if (i < 0n) i = 0n;
+      if (i >= idx.total) i = idx.total - 1n;
+      const cells = unrankSolution(i, idx);
+      self.postMessage({ id, type: "nav-result", mode, index: i.toString(), total: idx.total.toString(), cells });
     }
   } catch (err) {
     self.postMessage({ id, type: "error", message: String(err && err.message || err) });
@@ -766,6 +978,13 @@ let worker = null;
 let currentRequestId = 0;
 
 function spawnWorker() {
+  // About to orphan the current worker (and whatever request it's mid-way
+  // through) -- re-enable anything that was waiting on it, so a button
+  // toggled mid-request (e.g. the debounced grid recompute firing while a
+  // "random path" or "browse" request is in flight) can never get stuck
+  // disabled forever.
+  setSearchButtonsEnabled(true);
+  setNavControlsEnabled(true);
   if (worker) { try { worker.terminate(); } catch (e) {} }
   const blob = new Blob([WORKER_SRC], { type: "text/javascript" });
   worker = new Worker(URL.createObjectURL(blob));
@@ -779,6 +998,8 @@ const state = {
   cols: 6,
   blocked: new Set(), // "r,c"
   route: null, // { cells: [[r,c],...], mode: "path"|"cycle" }
+  browseMode: null, // null | "path" | "cycle" -- which mode the nav toolbar is showing
+  browseTotal: { path: null, cycle: null }, // BigInt totals once known, per mode
 };
 
 const MIN_N = 2, MAX_N = 10;
@@ -800,6 +1021,17 @@ const els = {
   timingNote: document.getElementById("timing-note"),
   showPathBtn: document.getElementById("btn-show-path"),
   showCycleBtn: document.getElementById("btn-show-cycle"),
+  routeCaption: document.getElementById("route-caption"),
+  browsePathBtn: document.getElementById("btn-browse-path"),
+  browseCycleBtn: document.getElementById("btn-browse-cycle"),
+  navRow: document.getElementById("nav-row"),
+  navPrev: document.getElementById("nav-prev"),
+  navNext: document.getElementById("nav-next"),
+  navReadout: document.getElementById("nav-readout"),
+  navJumpForm: document.getElementById("nav-jump-form"),
+  navJumpInput: document.getElementById("nav-jump-input"),
+  navRandomBtn: document.getElementById("nav-random-btn"),
+  navStatus: document.getElementById("nav-status"),
   tooltip: document.getElementById("tooltip"),
 };
 
@@ -935,12 +1167,21 @@ function drawRoute(svg, ns) {
   }
 }
 
+function resetRoute() {
+  state.route = null;
+  state.browseMode = null;
+  state.browseTotal = { path: null, cycle: null };
+  els.routeCaption.textContent = "";
+  els.navRow.style.display = "none";
+  els.navStatus.style.display = "none";
+}
+
 function onCellToggle(e) {
   const r = Number(e.currentTarget.dataset.r), c = Number(e.currentTarget.dataset.c);
   const key = r + "," + c;
   if (state.blocked.has(key)) state.blocked.delete(key);
   else state.blocked.add(key);
-  state.route = null;
+  resetRoute();
   renderGrid();
   updateNote();
   scheduleCompute();
@@ -963,7 +1204,7 @@ function setDims(rows, cols) {
   els.rowsVal.textContent = state.rows;
   els.colsVal.textContent = state.cols;
   pruneBlockedToBounds();
-  state.route = null;
+  resetRoute();
   renderGrid();
   updateNote();
   updateStepperDisabled();
@@ -984,7 +1225,7 @@ els.colsInc.addEventListener("click", () => setDims(state.rows, state.cols + 1))
 
 els.clearBtn.addEventListener("click", () => {
   state.blocked = new Set();
-  state.route = null;
+  resetRoute();
   renderGrid();
   updateNote();
   scheduleCompute();
@@ -997,7 +1238,7 @@ els.randomizeBtn.addEventListener("click", () => {
   for (let r = 0; r < state.rows; r++) for (let c = 0; c < state.cols; c++) all.push(r + "," + c);
   for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
   state.blocked = new Set(all.slice(0, Math.min(targetHoles, total - 1)));
-  state.route = null;
+  resetRoute();
   renderGrid();
   updateNote();
   scheduleCompute();
@@ -1069,16 +1310,51 @@ function handleWorkerMessage(e) {
     window.__computeDoneCount = (window.__computeDoneCount || 0) + 1;
   } else if (msg.type === "search-done") {
     if (msg.result) {
-      state.route = { cells: msg.result, mode: msg.mode };
+      state.route = { cells: msg.result, mode: msg.mode, index: null, total: null };
+      state.browseMode = null;
+      els.navRow.style.display = "none";
+      els.navStatus.style.display = "none";
+      els.routeCaption.textContent = `Showing a random ${msg.mode}.`;
       renderGrid();
     } else {
-      state.route = null;
+      resetRoute();
       renderGrid();
       els.gridNote.insertAdjacentHTML("beforeend", ` <span class="chip warn">no ${msg.mode === "cycle" ? "cycle" : "path"} exists for this shape</span>`);
     }
     setSearchButtonsEnabled(true);
+  } else if (msg.type === "nav-building") {
+    els.navRow.style.display = "";
+    els.navReadout.textContent = "preparing…";
+    els.navStatus.style.display = "";
+    els.navStatus.textContent = "preparing solution browser… (one-time per grid, can take a while on large grids)";
+    setNavControlsEnabled(false);
+  } else if (msg.type === "nav-empty") {
+    els.navStatus.style.display = "";
+    els.navStatus.textContent = `no ${msg.mode === "cycle" ? "cycles" : "paths"} exist for this shape — nothing to browse.`;
+    els.navRow.style.display = "none";
+    setNavControlsEnabled(true);
+  } else if (msg.type === "nav-result") {
+    const total = BigInt(msg.total);
+    const index = BigInt(msg.index);
+    state.route = { cells: msg.cells, mode: msg.mode, index, total };
+    state.browseMode = msg.mode;
+    state.browseTotal[msg.mode] = total;
+    els.navStatus.style.display = "none";
+    els.navRow.style.display = "";
+    els.routeCaption.textContent = "";
+    els.navReadout.textContent = `Solution ${fmtBig((index + 1n).toString())} of ${fmtBig(total.toString())}`;
+    els.navJumpInput.value = "";
+    els.navJumpInput.placeholder = fmtBig((index + 1n).toString());
+    setNavControlsEnabled(true);
+    els.navPrev.disabled = index === 0n;
+    els.navNext.disabled = index === total - 1n;
+    renderGrid();
+    window.__navResultCount = (window.__navResultCount || 0) + 1;
   } else if (msg.type === "error") {
     els.progressWrap.style.display = "none";
+    els.navStatus.style.display = "";
+    els.navStatus.textContent = "something went wrong computing that — try a different grid.";
+    setNavControlsEnabled(true);
     console.error("worker error:", msg.message);
   }
 }
@@ -1086,6 +1362,15 @@ function handleWorkerMessage(e) {
 function setSearchButtonsEnabled(on) {
   els.showPathBtn.disabled = !on;
   els.showCycleBtn.disabled = !on;
+}
+
+function setNavControlsEnabled(on) {
+  els.navPrev.disabled = !on;
+  els.navNext.disabled = !on;
+  els.navRandomBtn.disabled = !on;
+  els.navJumpInput.disabled = !on;
+  els.browsePathBtn.disabled = !on;
+  els.browseCycleBtn.disabled = !on;
 }
 
 function requestExample(mode) {
@@ -1109,6 +1394,77 @@ function spawnWorkerIfNeeded() {
 
 els.showPathBtn.addEventListener("click", () => requestExample("path"));
 els.showCycleBtn.addEventListener("click", () => requestExample("cycle"));
+
+/* ---------------- browse-by-number ---------------- */
+function randomBigIntBelow(total) {
+  // Uniform in [0, total): draw a value with exactly total's bit-length
+  // (chunked to fit doubles safely) and reject draws >= total. Since
+  // 2^bits < 2*total whenever bits is total's own bit-length, this takes
+  // under 2 tries on average -- true for any size, including total===1n.
+  const bits = total.toString(2).length;
+  let r;
+  do {
+    r = 0n;
+    let remaining = bits;
+    while (remaining > 0) {
+      const take = Math.min(30, remaining);
+      r = (r << BigInt(take)) | BigInt(Math.floor(Math.random() * (1 << take)));
+      remaining -= take;
+    }
+  } while (r >= total);
+  return r;
+}
+
+
+function requestNav(mode, indexStr) {
+  spawnWorkerIfNeeded();
+  currentRequestId += 1;
+  const id = currentRequestId;
+  setNavControlsEnabled(false);
+  worker.postMessage({
+    id,
+    type: "nav",
+    rows: state.rows,
+    cols: state.cols,
+    blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
+    mode,
+    index: indexStr,
+  });
+}
+
+function startBrowse(mode) {
+  // Resume where we left off for this mode if we have a known index already,
+  // otherwise start at the first solution.
+  const resume = state.browseMode === mode && state.route && state.route.index !== null;
+  requestNav(mode, resume ? state.route.index.toString() : "0");
+}
+
+function navStep(delta) {
+  if (!state.route || state.route.index === null || !state.browseMode) return;
+  const next = state.route.index + BigInt(delta);
+  requestNav(state.browseMode, next.toString());
+}
+
+function navRandomWithinBrowse() {
+  if (!state.browseMode || state.browseTotal[state.browseMode] === null) return;
+  const total = state.browseTotal[state.browseMode];
+  requestNav(state.browseMode, randomBigIntBelow(total).toString());
+}
+
+els.browsePathBtn.addEventListener("click", () => startBrowse("path"));
+els.browseCycleBtn.addEventListener("click", () => startBrowse("cycle"));
+els.navPrev.addEventListener("click", () => navStep(-1));
+els.navNext.addEventListener("click", () => navStep(1));
+els.navRandomBtn.addEventListener("click", navRandomWithinBrowse);
+els.navJumpForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!state.browseMode) return;
+  const raw = els.navJumpInput.value.trim().replace(/,/g, "");
+  if (!/^\d+$/.test(raw)) return;
+  const oneBased = BigInt(raw);
+  if (oneBased < 1n) return;
+  requestNav(state.browseMode, (oneBased - 1n).toString());
+});
 
 /* ============================== Reference chart ============================== */
 const REFERENCE_DATA = [
@@ -1254,8 +1610,10 @@ function boot() {
   updateNote();
   renderChart();
   runCompute();
-  // Hero moment: trace an example cycle automatically once the page loads.
-  setTimeout(() => requestExample("cycle"), 550);
+  // Hero moment: trace an example cycle automatically once the page loads,
+  // via the numbered browser, so the "which one is this?" answer is right
+  // there from the first thing you see.
+  setTimeout(() => startBrowse("cycle"), 550);
 }
 boot();
 </script>
