@@ -111,6 +111,17 @@ An example Hamiltonian path on a plus-shaped grid with blocked corners
 
 ![Example path on a plus-shaped grid](figures/example_plus_path.png)
 
+## Interactive web version
+
+[`web/hamilton-loom.html`](web/hamilton-loom.html) is a self-contained, no-install
+GUI: open it in any browser to click cells to cut holes into a grid, see the
+exact path/cycle counts update live, and watch an example route trace itself
+onto the grid. It's a JavaScript port of the same broken-profile DP and
+Warnsdorff-search algorithms as the Python package (validated against the
+Python implementation's outputs, including the full 10x10 case), running in
+a Web Worker so the page stays responsive during a multi-second count. No
+build step or server needed — just open the file.
+
 ## Project layout
 
 ```
@@ -128,6 +139,7 @@ tests/            pytest suite, including brute-force cross-validation
 shapes/           example ASCII grid shapes
 data/             generated counts.csv / counts.json
 figures/          generated PNGs
+web/              standalone interactive HTML GUI (JS port of the algorithm)
 ```
 
 ## Non-goals (for now)

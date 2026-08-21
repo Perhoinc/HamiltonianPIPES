@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hamilton Loom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@6..72,500;6..72,600;6..72,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --paper: #eef1f3;
+    --surface: #f8f9fa;
+    --surface-2: #ffffff;
+    --ink: #1b262c;
+    --ink-soft: #33424a;
+    --muted: #5b6b73;
+    --line: #c7d2d6;
+    --line-soft: #dde4e7;
+    --accent-path: #c1571e;
+    --accent-path-soft: #f2ded0;
+    --accent-cycle: #0e8f6f;
+    --accent-cycle-soft: #d7ece5;
+    --blocked: #29343a;
+    --blocked-hatch: #3d4a52;
+    --status-error: #b3261e;
+    --status-error-soft: #f6dedb;
+    --focus-ring: #1f6f9c;
+    --shadow: 0 1px 2px rgba(27, 38, 44, 0.06), 0 8px 24px -12px rgba(27, 38, 44, 0.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #10161a;
+      --surface: #171f24;
+      --surface-2: #1b2328;
+      --ink: #e7edf0;
+      --ink-soft: #c7d1d5;
+      --muted: #8ea0a8;
+      --line: #2a363c;
+      --line-soft: #202a2f;
+      --accent-path: #d16b28;
+      --accent-path-soft: #3a2a1c;
+      --accent-cycle: #2fa07f;
+      --accent-cycle-soft: #16332c;
+      --blocked: #05070a;
+      --blocked-hatch: #0f1418;
+      --status-error: #e5645c;
+      --status-error-soft: #3a1f1d;
+      --focus-ring: #5fb4e0;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 28px -12px rgba(0, 0, 0, 0.6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #10161a;
+    --surface: #171f24;
+    --surface-2: #1b2328;
+    --ink: #e7edf0;
+    --ink-soft: #c7d1d5;
+    --muted: #8ea0a8;
+    --line: #2a363c;
+    --line-soft: #202a2f;
+    --accent-path: #d16b28;
+    --accent-path-soft: #3a2a1c;
+    --accent-cycle: #2fa07f;
+    --accent-cycle-soft: #16332c;
+    --blocked: #05070a;
+    --blocked-hatch: #0f1418;
+    --status-error: #e5645c;
+    --status-error-soft: #3a1f1d;
+    --focus-ring: #5fb4e0;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 28px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 24px 80px;
+  }
+
+  h1, h2, h3 { font-family: "Literata", Georgia, "Times New Roman", serif; text-wrap: balance; margin: 0; }
+
+  .mono { font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-path);
+  }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-left: 20px;
+    border-left: 3px solid var(--accent-path);
+    margin-bottom: 44px;
+  }
+  header h1 { font-size: clamp(32px, 5vw, 46px); font-weight: 600; }
+  header .dek { max-width: 62ch; color: var(--ink-soft); font-size: 16px; }
+  header .dek strong { color: var(--ink); font-weight: 600; }
+
+  .theme-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 20;
+    display: flex;
+    gap: 2px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 3px;
+    box-shadow: var(--shadow);
+  }
+  .theme-toggle button {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: 500 12px "IBM Plex Sans", sans-serif;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .theme-toggle button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+  .theme-toggle button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+  /* ---------- layout ---------- */
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .workspace { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 22px 24px 26px;
+  }
+
+  .card h2 {
+    font-size: 13px;
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .card .card-sub { color: var(--muted); font-size: 13.5px; margin-bottom: 18px; }
+
+  /* ---------- grid controls ---------- */
+  .dims-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stepper label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 4px;
+  }
+  .stepper button {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .stepper button:hover { border-color: var(--accent-path); color: var(--accent-path); }
+  .stepper button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .stepper button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .stepper .val {
+    min-width: 22px;
+    text-align: center;
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 500;
+    font-size: 15px;
+  }
+
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .btn {
+    font: 500 12.5px "IBM Plex Sans", sans-serif;
+    padding: 7px 13px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  }
+  .btn:hover { border-color: var(--muted); color: var(--ink); }
+  .btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .btn.accent-path { border-color: var(--accent-path); color: var(--accent-path); }
+  .btn.accent-path:hover { background: var(--accent-path-soft); }
+  .btn.accent-cycle { border-color: var(--accent-cycle); color: var(--accent-cycle); }
+  .btn.accent-cycle:hover { background: var(--accent-cycle-soft); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .grid-shell { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .grid-svg-wrap { width: 100%; display: flex; justify-content: center; }
+  svg.gridsvg { max-width: 100%; height: auto; user-select: none; }
+  .cell {
+    fill: var(--surface-2);
+    stroke: var(--line);
+    stroke-width: 1;
+    cursor: pointer;
+    transition: fill 100ms ease;
+  }
+  .cell:hover { fill: var(--accent-path-soft); }
+  .cell:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .cell.blocked { fill: var(--blocked); cursor: pointer; }
+  .cell.blocked:hover { fill: var(--blocked-hatch); }
+  .cell-hatch { stroke: var(--blocked-hatch); stroke-width: 1; pointer-events: none; }
+
+  .route-line { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  .route-dot { }
+  .route-marker-start { fill: none; stroke-width: 2.5; pointer-events: none; }
+  .route-marker-end { pointer-events: none; }
+
+  .grid-note { font-size: 12.5px; color: var(--muted); text-align: center; min-height: 16px; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px 3px 8px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--line-soft);
+    color: var(--ink-soft);
+  }
+  .chip.warn { background: var(--status-error-soft); color: var(--status-error); }
+  .chip .sw { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+
+  /* ---------- results ---------- */
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 0 16px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .stat:first-of-type { border-top: none; padding-top: 4px; }
+  .stat-label { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-soft); font-weight: 500; }
+  .stat-label .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .stat-label .sw.path { background: var(--accent-path); }
+  .stat-label .sw.cycle { background: var(--accent-cycle); }
+  .stat-value {
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 500;
+    font-size: clamp(20px, 3.1vw, 28px);
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  .stat-value.path { color: var(--accent-path); }
+  .stat-value.cycle { color: var(--accent-cycle); }
+  .stat-value.zero { color: var(--muted); }
+  .stat-value .unit { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+
+  .progress-line {
+    height: 3px;
+    border-radius: 3px;
+    background: var(--line-soft);
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-line .bar {
+    height: 100%;
+    width: 40%;
+    background: var(--accent-path);
+    border-radius: 3px;
+    animation: slide 1.1s ease-in-out infinite;
+  }
+  @keyframes slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+  .compute-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  .example-row { display: flex; gap: 8px; margin: 20px 0 6px; flex-wrap: wrap; }
+  .method-note {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line-soft);
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+
+  /* ---------- chart section ---------- */
+  .chart-section { margin-top: 44px; }
+  .chart-section h2 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .chart-section .card-sub { color: var(--muted); font-size: 14px; margin-bottom: 22px; max-width: 68ch; }
+  .chart-card { padding: 24px 26px 18px; }
+  .chart-scroll { overflow-x: auto; }
+  .legend { display: flex; gap: 18px; margin-bottom: 4px; font-size: 12.5px; color: var(--ink-soft); }
+  .legend .item { display: flex; align-items: center; gap: 7px; }
+  .legend .sw { width: 18px; height: 2px; border-radius: 2px; }
+  .legend .sw.path { background: var(--accent-path); }
+  .legend .sw.cycle { background: var(--accent-cycle); }
+
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 10px));
+    white-space: nowrap;
+    transition: opacity 100ms ease;
+    z-index: 30;
+  }
+  #tooltip.show { opacity: 1; }
+
+  .axis-line { stroke: var(--line); stroke-width: 1; }
+  .grid-line-h { stroke: var(--line-soft); stroke-width: 1; stroke-dasharray: 2 3; }
+  .axis-label { fill: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 11px; }
+  .chart-line { fill: none; stroke-width: 2; }
+  .chart-dot { stroke: var(--surface); stroke-width: 2; }
+  .current-n-line { stroke: var(--accent-path); stroke-width: 1.2; stroke-dasharray: 3 3; opacity: 0.7; }
+  .current-n-label { fill: var(--accent-path); font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 500; }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12.5px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  footer .mono { color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress-line .bar { animation: none; }
+    * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+  }
+</style>
+
+</head>
+<body>
+
+<div class="theme-toggle" role="group" aria-label="Theme">
+  <button id="theme-system" type="button" aria-pressed="true">Auto</button>
+  <button id="theme-light" type="button" aria-pressed="false">Light</button>
+  <button id="theme-dark" type="button" aria-pressed="false">Dark</button>
+</div>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Grid combinatorics · exact enumeration</div>
+    <h1>Hamilton Loom</h1>
+    <p class="dek">Weave a route through every open cell of a grid, <strong>exactly once</strong>, and never repeat one. Block off cells to cut arbitrary shapes, and get the <strong>exact</strong> count of every such route — computed, not estimated, even when there are hundreds of trillions of them.</p>
+  </header>
+
+  <div class="workspace">
+    <section class="card" aria-labelledby="grid-heading">
+      <h2 id="grid-heading">The grid</h2>
+      <p class="card-sub">Click any cell to cut it out of the grid. Routes weave around the gaps.</p>
+
+      <div class="dims-row">
+        <div class="stepper">
+          <label for="rows-val">Rows</label>
+          <button type="button" id="rows-dec" aria-label="Fewer rows">&minus;</button>
+          <span class="val mono tnum" id="rows-val">6</span>
+          <button type="button" id="rows-inc" aria-label="More rows">+</button>
+        </div>
+        <div class="stepper">
+          <label for="cols-val">Cols</label>
+          <button type="button" id="cols-dec" aria-label="Fewer columns">&minus;</button>
+          <span class="val mono tnum" id="cols-val">6</span>
+          <button type="button" id="cols-inc" aria-label="More columns">+</button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn" id="btn-clear">Clear cuts</button>
+        <button type="button" class="btn" id="btn-randomize">Cut some holes</button>
+      </div>
+
+      <div class="grid-shell">
+        <div class="grid-svg-wrap"><svg class="gridsvg" id="grid-svg" role="group" aria-label="Editable grid"></svg></div>
+        <div class="grid-note" id="grid-note"></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="results-heading">
+      <h2 id="results-heading">Exact counts</h2>
+      <p class="card-sub" id="results-sub">Recomputes automatically whenever the grid changes.</p>
+
+      <div class="stat">
+        <div class="stat-label"><span class="sw path"></span>Hamiltonian paths</div>
+        <div class="stat-value path tnum mono" id="paths-value">&mdash;</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label"><span class="sw cycle"></span>Hamiltonian cycles</div>
+        <div class="stat-value cycle tnum mono" id="cycles-value">&mdash;</div>
+      </div>
+
+      <div id="progress-wrap" style="display:none;">
+        <div class="progress-line"><div class="bar"></div></div>
+        <div class="compute-note" id="progress-note">counting&hellip;</div>
+      </div>
+      <div class="compute-note" id="timing-note" style="display:none;"></div>
+
+      <div class="example-row">
+        <button type="button" class="btn accent-path" id="btn-show-path">Trace an example path</button>
+        <button type="button" class="btn accent-cycle" id="btn-show-cycle">Trace an example cycle</button>
+      </div>
+
+      <p class="method-note">Counted exactly with a "broken-profile" dynamic program that sweeps the grid once, tracking which cells still have a dangling connection — no route is ever built and thrown away, so it stays fast even when there are trillions of them. Cross-checked against brute-force enumeration and against <a href="https://oeis.org/A096969" style="color:inherit" target="_blank" rel="noopener">OEIS A096969</a> / <a href="https://oeis.org/A003763" style="color:inherit" target="_blank" rel="noopener">A003763</a>.</p>
+    </section>
+  </div>
+
+  <section class="chart-section" aria-labelledby="chart-heading">
+    <h2 id="chart-heading">How the count grows</h2>
+    <p class="card-sub">Every route on a plain N&times;N grid (no cuts), N = 2 to 10. The y-axis is logarithmic &mdash; each gridline is 100&times; more routes than the one below it.</p>
+    <div class="card chart-card">
+      <div class="legend">
+        <span class="item"><span class="sw path"></span>Hamiltonian paths</span>
+        <span class="item"><span class="sw cycle"></span>Hamiltonian cycles</span>
+      </div>
+      <div class="chart-scroll">
+        <svg id="chart-svg" width="820" height="360" role="img" aria-label="Line chart of Hamiltonian path and cycle counts for N by N grids, N from 2 to 10, on a logarithmic scale"></svg>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>A curiosity project &mdash; standalone, not affiliated with any larger tool.</span>
+    <span class="mono">plug/profile DP &middot; exact, not estimated</span>
+  </footer>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+"use strict";
+
+/* ============================== Theme ============================== */
+(function () {
+  const root = document.documentElement;
+  const buttons = {
+    system: document.getElementById("theme-system"),
+    light: document.getElementById("theme-light"),
+    dark: document.getElementById("theme-dark"),
+  };
+  function apply(mode) {
+    if (mode === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", mode);
+    Object.entries(buttons).forEach(([k, btn]) => btn.setAttribute("aria-pressed", String(k === mode)));
+    try { localStorage.setItem("hamilton-loom-theme", mode); } catch (e) {}
+  }
+  let saved = "system";
+  try { saved = localStorage.getItem("hamilton-loom-theme") || "system"; } catch (e) {}
+  apply(saved);
+  buttons.system.addEventListener("click", () => apply("system"));
+  buttons.light.addEventListener("click", () => apply("light"));
+  buttons.dark.addEventListener("click", () => apply("dark"));
+})();
+
+/* ============================== Worker core (DP + search) ============================== */
+const WORKER_SRC = String.raw`
+const EMPTY = 0, OPEN = 1, CLOSE = 2, LONE = 3;
+
+function isOpen(grid, r, c) {
+  return r >= 0 && r < grid.rows && c >= 0 && c < grid.cols && !grid.blocked.has(r + "," + c);
+}
+function findPartner(combined, pos) {
+  const val = combined[pos];
+  if (val === OPEN) {
+    let bal = 1;
+    for (let k = pos + 1; k < combined.length; k++) {
+      const v = combined[k];
+      if (v === OPEN) bal++;
+      else if (v === CLOSE) { bal--; if (bal === 0) return k; }
+    }
+    throw new Error("no matching CLOSE");
+  } else if (val === CLOSE) {
+    let bal = 1;
+    for (let k = pos - 1; k >= 0; k--) {
+      const v = combined[k];
+      if (v === CLOSE) bal++;
+      else if (v === OPEN) { bal--; if (bal === 0) return k; }
+    }
+    throw new Error("no matching OPEN");
+  }
+  throw new Error("no partner for type " + val);
+}
+function restIsEmpty(combined, c) {
+  for (let i = 0; i < combined.length; i++) if (i !== c && i !== c + 1 && combined[i] !== EMPTY) return false;
+  return true;
+}
+function build(nc, c, downOut) {
+  return nc.slice(0, c).concat([downOut], nc.slice(c + 2));
+}
+function* transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep) {
+  const leftIn = combined[c], upIn = combined[c + 1];
+  if (isBlocked) {
+    if (leftIn !== EMPTY || upIn !== EMPTY) return;
+    yield ["cont", build(combined.slice(), c, EMPTY), EMPTY, ep];
+    return;
+  }
+  if (leftIn === EMPTY && upIn === EMPTY) {
+    if (hasRight && hasDown) yield ["cont", build(combined.slice(), c, OPEN), CLOSE, ep];
+    if (allowLone && ep < maxEndpoints) {
+      if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), LONE, ep + 1];
+      if (hasDown) yield ["cont", build(combined.slice(), c, LONE), EMPTY, ep + 1];
+    }
+    return;
+  }
+  if ((leftIn === EMPTY) !== (upIn === EMPTY)) {
+    const x = leftIn || upIn;
+    const posX = leftIn !== EMPTY ? c : c + 1;
+    if (x === OPEN || x === CLOSE) {
+      if (hasDown) yield ["cont", build(combined.slice(), c, x), EMPTY, ep];
+      if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), x, ep];
+      if (allowLone && ep < maxEndpoints) {
+        const nc = combined.slice();
+        nc[findPartner(nc, posX)] = LONE;
+        yield ["cont", build(nc, c, EMPTY), EMPTY, ep + 1];
+      }
+    } else {
+      if (hasDown) yield ["cont", build(combined.slice(), c, LONE), EMPTY, ep];
+      if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), LONE, ep];
+      if (allowLone && isLast && ep + 1 === maxEndpoints && restIsEmpty(combined, c)) yield ["sol"];
+    }
+    return;
+  }
+  if (leftIn === LONE && upIn === LONE) {
+    if (isLast && restIsEmpty(combined, c)) yield ["sol"];
+    return;
+  }
+  if (leftIn === LONE || upIn === LONE) {
+    const pairedPos = (leftIn === OPEN || leftIn === CLOSE) ? c : c + 1;
+    const nc = combined.slice();
+    nc[findPartner(nc, pairedPos)] = LONE;
+    yield ["cont", build(nc, c, EMPTY), EMPTY, ep];
+    return;
+  }
+  const nc = combined.slice();
+  const partnerOfLeft = findPartner(nc, c);
+  if (partnerOfLeft === c + 1) {
+    if (isLast && !allowLone && restIsEmpty(combined, c)) yield ["sol"];
+    return;
+  }
+  const partnerOfUp = findPartner(nc, c + 1);
+  const p1 = Math.min(partnerOfLeft, partnerOfUp), p2 = Math.max(partnerOfLeft, partnerOfUp);
+  nc[p1] = OPEN; nc[p2] = CLOSE;
+  yield ["cont", build(nc, c, EMPTY), EMPTY, ep];
+}
+function keyOf(profile, left, ep) { return profile.join(",") + "|" + left + "|" + ep; }
+
+function countStructures(grid, mode) {
+  const R = grid.rows, C = grid.cols;
+  const openMask = [];
+  for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push(isOpen(grid, r, c)); openMask.push(row); }
+  let numOpen = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) numOpen++;
+  if (numOpen === 0) return 0n;
+  if (numOpen === 1) return mode === "path" ? 1n : 0n;
+  if (mode === "cycle") {
+    let black = 0;
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c] && (r + c) % 2 === 0) black++;
+    if (black !== numOpen - black) return 0n;
+  }
+  const allowLone = mode === "path";
+  const maxEndpoints = allowLone ? 2 : 0;
+  let lastOpen = null;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) lastOpen = r * C + c;
+  let states = new Map();
+  states.set(keyOf(new Array(C).fill(EMPTY), EMPTY, 0), 1n);
+  let answer = 0n;
+  for (let r = 0; r < R; r++) {
+    const hasDown = r < R - 1;
+    for (let c = 0; c < C; c++) {
+      const hasRight = c < C - 1;
+      const isBlocked = !openMask[r][c];
+      const isLast = (r * C + c) === lastOpen;
+      const nextStates = new Map();
+      for (const [key, ways] of states) {
+        const bar = key.indexOf("|"), bar2 = key.indexOf("|", bar + 1);
+        const profStr = key.slice(0, bar), left = Number(key.slice(bar + 1, bar2)), ep = Number(key.slice(bar2 + 1));
+        const profile = profStr.split(",").map(Number);
+        const combined = profile.slice(0, c).concat([left], profile.slice(c));
+        for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep)) {
+          if (outcome[0] === "sol") { answer += ways; }
+          else {
+            const k = keyOf(outcome[1], outcome[2], outcome[3]);
+            nextStates.set(k, (nextStates.get(k) || 0n) + ways);
+          }
+        }
+      }
+      states = nextStates;
+      if (states.size === 0) return answer;
+    }
+  }
+  return answer;
+}
+
+function bestOrientation(rows, cols, blockedArr) {
+  if (cols > rows) {
+    const t = new Set();
+    for (const [r, c] of blockedArr) t.add(c + "," + r);
+    return { rows: cols, cols: rows, blocked: t };
+  }
+  return { rows, cols, blocked: new Set(blockedArr.map(([r, c]) => r + "," + c)) };
+}
+
+/* ---- fast single-solution search (Warnsdorff + connectivity pruning) ---- */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shuffleInPlace(arr, rng) {
+  for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp; }
+}
+class BitSet {
+  constructor(n) { this.n = n; this.words = new Int32Array(Math.ceil(n / 32) || 1); }
+  clone() { const b = new BitSet(this.n); b.words.set(this.words); return b; }
+  set(i) { this.words[i >> 5] |= (1 << (i & 31)); }
+  has(i) { return (this.words[i >> 5] & (1 << (i & 31))) !== 0; }
+  static fromBit(n, i) { const b = new BitSet(n); b.set(i); return b; }
+}
+function findOneSolution(rows, cols, blockedArr, wantCycle, seed) {
+  const blocked = new Set(blockedArr.map(([r, c]) => r + "," + c));
+  const grid = { rows, cols, blocked };
+  const cells = [], index = new Map();
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (!blocked.has(r + "," + c)) { index.set(r + "," + c, cells.length); cells.push([r, c]); }
+  const n = cells.length;
+  if (n === 0) return null;
+  if (n === 1) return wantCycle ? null : [cells[0]];
+  if (wantCycle && n < 4) return null;
+  const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+  const neighborLists = cells.map(([r, c]) => {
+    const out = [];
+    for (const [dr, dc] of DIRS) { const key = (r + dr) + "," + (c + dc); if (index.has(key)) out.push(index.get(key)); }
+    return out;
+  });
+  const rng = mulberry32(seed >>> 0);
+  const startOrder = [...Array(n).keys()];
+  shuffleInPlace(startOrder, rng);
+  function remainingConnected(visited, frm) {
+    let remainingCount = 0;
+    for (let i = 0; i < n; i++) if (!visited.has(i)) remainingCount++;
+    if (remainingCount === 0) return true;
+    const seen = new BitSet(n);
+    const stack = [];
+    for (const nb of neighborLists[frm]) if (!visited.has(nb) && !seen.has(nb)) { seen.set(nb); stack.push(nb); }
+    let seenCount = stack.length;
+    while (stack.length) {
+      const cur = stack.pop();
+      for (const nb of neighborLists[cur]) if (!visited.has(nb) && !seen.has(nb)) { seen.set(nb); stack.push(nb); seenCount++; }
+    }
+    return seenCount === remainingCount;
+  }
+  function onwardDegree(idx, visited) { let d = 0; for (const nb of neighborLists[idx]) if (!visited.has(nb)) d++; return d; }
+  function dfs(pos, visited, path, startNeighborSet) {
+    if (path.length === n) { if (!wantCycle) return path.slice(); return neighborLists[pos].includes(path[0]) ? path.slice() : null; }
+    let candidates = neighborLists[pos].filter((idx) => !visited.has(idx));
+    if (candidates.length === 0) return null;
+    shuffleInPlace(candidates, rng);
+    if (wantCycle) {
+      candidates.sort((a, b) => {
+        const aStart = startNeighborSet.has(a) ? 1 : 0, bStart = startNeighborSet.has(b) ? 1 : 0;
+        if (aStart !== bStart) return aStart - bStart;
+        return onwardDegree(a, visited) - onwardDegree(b, visited);
+      });
+    } else {
+      candidates.sort((a, b) => onwardDegree(a, visited) - onwardDegree(b, visited));
+    }
+    for (const nxt of candidates) {
+      const newVisited = visited.clone(); newVisited.set(nxt);
+      if (!remainingConnected(newVisited, nxt)) continue;
+      path.push(nxt);
+      const result = dfs(nxt, newVisited, path, startNeighborSet);
+      if (result) return result;
+      path.pop();
+    }
+    return null;
+  }
+  for (const start of startOrder) {
+    const visited = BitSet.fromBit(n, start);
+    const startNeighborSet = new Set(neighborLists[start]);
+    const result = dfs(start, visited, [start], startNeighborSet);
+    if (result) return result.map((i) => cells[i]);
+  }
+  return null;
+}
+
+self.onmessage = function (e) {
+  const { id, type, rows, cols, blocked, mode, seed } = e.data;
+  try {
+    if (type === "count") {
+      const t0 = performance.now();
+      const cycles = countStructures(bestOrientation(rows, cols, blocked), "cycle");
+      self.postMessage({ id, type: "count-partial", metric: "cycles", value: cycles.toString(), ms: performance.now() - t0 });
+      const t1 = performance.now();
+      const paths = countStructures(bestOrientation(rows, cols, blocked), "path");
+      self.postMessage({ id, type: "count-partial", metric: "paths", value: paths.toString(), ms: performance.now() - t1 });
+      self.postMessage({ id, type: "count-done" });
+    } else if (type === "search") {
+      const result = findOneSolution(rows, cols, blocked, mode === "cycle", seed);
+      self.postMessage({ id, type: "search-done", mode, result });
+    }
+  } catch (err) {
+    self.postMessage({ id, type: "error", message: String(err && err.message || err) });
+  }
+};
+`;
+
+let worker = null;
+let currentRequestId = 0;
+
+function spawnWorker() {
+  if (worker) { try { worker.terminate(); } catch (e) {} }
+  const blob = new Blob([WORKER_SRC], { type: "text/javascript" });
+  worker = new Worker(URL.createObjectURL(blob));
+  worker.onmessage = handleWorkerMessage;
+  return worker;
+}
+
+/* ============================== App state ============================== */
+const state = {
+  rows: 6,
+  cols: 6,
+  blocked: new Set(), // "r,c"
+  route: null, // { cells: [[r,c],...], mode: "path"|"cycle" }
+};
+
+const MIN_N = 2, MAX_N = 10;
+const els = {
+  rowsVal: document.getElementById("rows-val"),
+  colsVal: document.getElementById("cols-val"),
+  rowsDec: document.getElementById("rows-dec"),
+  rowsInc: document.getElementById("rows-inc"),
+  colsDec: document.getElementById("cols-dec"),
+  colsInc: document.getElementById("cols-inc"),
+  clearBtn: document.getElementById("btn-clear"),
+  randomizeBtn: document.getElementById("btn-randomize"),
+  gridSvg: document.getElementById("grid-svg"),
+  gridNote: document.getElementById("grid-note"),
+  pathsValue: document.getElementById("paths-value"),
+  cyclesValue: document.getElementById("cycles-value"),
+  progressWrap: document.getElementById("progress-wrap"),
+  progressNote: document.getElementById("progress-note"),
+  timingNote: document.getElementById("timing-note"),
+  showPathBtn: document.getElementById("btn-show-path"),
+  showCycleBtn: document.getElementById("btn-show-cycle"),
+  tooltip: document.getElementById("tooltip"),
+};
+
+function clampDim(n) { return Math.max(MIN_N, Math.min(MAX_N, n)); }
+
+function pruneBlockedToBounds() {
+  const next = new Set();
+  for (const key of state.blocked) {
+    const [r, c] = key.split(",").map(Number);
+    if (r < state.rows && c < state.cols) next.add(key);
+  }
+  state.blocked = next;
+}
+
+/* ---------------- grid rendering ---------------- */
+const CELL = 42, GAP = 0;
+
+function renderGrid() {
+  const svg = els.gridSvg;
+  const w = state.cols * CELL, h = state.rows * CELL;
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.setAttribute("width", w);
+  svg.setAttribute("height", h);
+  svg.innerHTML = "";
+
+  const ns = "http://www.w3.org/2000/svg";
+  const cellsGroup = document.createElementNS(ns, "g");
+  svg.appendChild(cellsGroup);
+
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) {
+      const key = r + "," + c;
+      const isBlocked = state.blocked.has(key);
+      const rect = document.createElementNS(ns, "rect");
+      rect.setAttribute("x", c * CELL);
+      rect.setAttribute("y", r * CELL);
+      rect.setAttribute("width", CELL);
+      rect.setAttribute("height", CELL);
+      rect.setAttribute("class", "cell" + (isBlocked ? " blocked" : ""));
+      rect.setAttribute("tabindex", "0");
+      rect.setAttribute("role", "button");
+      rect.setAttribute("aria-pressed", String(isBlocked));
+      rect.setAttribute("aria-label", `Cell row ${r + 1}, column ${c + 1}, ${isBlocked ? "cut out" : "open"}`);
+      rect.dataset.r = r;
+      rect.dataset.c = c;
+      rect.addEventListener("click", onCellToggle);
+      rect.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onCellToggle(e); }
+      });
+      cellsGroup.appendChild(rect);
+
+      if (isBlocked) {
+        const x0 = c * CELL, y0 = r * CELL;
+        for (const line of hatchLines(x0, y0, CELL)) {
+          const l = document.createElementNS(ns, "line");
+          l.setAttribute("x1", line[0]); l.setAttribute("y1", line[1]);
+          l.setAttribute("x2", line[2]); l.setAttribute("y2", line[3]);
+          l.setAttribute("class", "cell-hatch");
+          cellsGroup.appendChild(l);
+        }
+      }
+    }
+  }
+
+  if (state.route) drawRoute(svg, ns);
+}
+
+function hatchLines(x0, y0, size) {
+  const lines = [];
+  const step = size / 3;
+  for (let k = -2; k <= 2; k++) {
+    const x1 = x0 + Math.max(0, k * step), y1 = y0 + Math.max(0, -k * step);
+    const x2 = x0 + Math.min(size, size + k * step), y2 = y0 + Math.min(size, size - k * step);
+    if (x1 < x0 + size && y1 < y0 + size && x2 > x0 && y2 > y0) lines.push([x1, y1, x2, y2]);
+  }
+  return lines;
+}
+
+function drawRoute(svg, ns) {
+  const { cells, mode } = state.route;
+  const color = mode === "cycle" ? "var(--accent-cycle)" : "var(--accent-path)";
+  const pts = cells.map(([r, c]) => [c * CELL + CELL / 2, r * CELL + CELL / 2]);
+
+  const group = document.createElementNS(ns, "g");
+  group.setAttribute("aria-hidden", "true");
+  group.style.pointerEvents = "none";
+  svg.appendChild(group);
+
+  let d = `M ${pts[0][0]} ${pts[0][1]} `;
+  for (let i = 1; i < pts.length; i++) d += `L ${pts[i][0]} ${pts[i][1]} `;
+  if (mode === "cycle") d += `L ${pts[0][0]} ${pts[0][1]} `;
+
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", d);
+  path.setAttribute("class", "route-line");
+  path.setAttribute("stroke", color);
+  path.setAttribute("stroke-width", Math.max(2.5, CELL * 0.09));
+  group.appendChild(path);
+
+  const len = path.getTotalLength();
+  path.style.strokeDasharray = String(len);
+  path.style.strokeDashoffset = String(len);
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) {
+    path.style.strokeDashoffset = "0";
+  } else {
+    const duration = Math.min(2600, 500 + cells.length * 22);
+    path.style.transition = `stroke-dashoffset ${duration}ms cubic-bezier(.4,.1,.2,1)`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { path.style.strokeDashoffset = "0"; }));
+  }
+
+  const startRadius = Math.max(4.5, CELL * 0.14);
+  const startCircle = document.createElementNS(ns, "circle");
+  startCircle.setAttribute("cx", pts[0][0]);
+  startCircle.setAttribute("cy", pts[0][1]);
+  startCircle.setAttribute("r", startRadius);
+  startCircle.setAttribute("class", "route-marker-start");
+  startCircle.setAttribute("stroke", color);
+  group.appendChild(startCircle);
+
+  if (mode === "path" && pts.length > 1) {
+    const endSize = Math.max(6, CELL * 0.18);
+    const [ex, ey] = pts[pts.length - 1];
+    const endRect = document.createElementNS(ns, "rect");
+    endRect.setAttribute("x", ex - endSize / 2);
+    endRect.setAttribute("y", ey - endSize / 2);
+    endRect.setAttribute("width", endSize);
+    endRect.setAttribute("height", endSize);
+    endRect.setAttribute("fill", "none");
+    endRect.setAttribute("stroke", color);
+    endRect.setAttribute("stroke-width", 2.5);
+    group.appendChild(endRect);
+  }
+}
+
+function onCellToggle(e) {
+  const r = Number(e.currentTarget.dataset.r), c = Number(e.currentTarget.dataset.c);
+  const key = r + "," + c;
+  if (state.blocked.has(key)) state.blocked.delete(key);
+  else state.blocked.add(key);
+  state.route = null;
+  renderGrid();
+  updateNote();
+  scheduleCompute();
+}
+
+function updateNote() {
+  const total = state.rows * state.cols;
+  const openCount = total - state.blocked.size;
+  let html = `<span class="chip"><span class="sw"></span>${openCount} open cell${openCount === 1 ? "" : "s"}</span>`;
+  if (openCount > 0 && openCount % 2 === 1) {
+    html += ` <span class="chip warn">odd count &mdash; no cycle is possible</span>`;
+  }
+  els.gridNote.innerHTML = html;
+}
+
+/* ---------------- dims controls ---------------- */
+function setDims(rows, cols) {
+  state.rows = clampDim(rows);
+  state.cols = clampDim(cols);
+  els.rowsVal.textContent = state.rows;
+  els.colsVal.textContent = state.cols;
+  pruneBlockedToBounds();
+  state.route = null;
+  renderGrid();
+  updateNote();
+  updateStepperDisabled();
+  renderChart();
+  scheduleCompute();
+}
+function updateStepperDisabled() {
+  els.rowsDec.disabled = state.rows <= MIN_N;
+  els.rowsInc.disabled = state.rows >= MAX_N;
+  els.colsDec.disabled = state.cols <= MIN_N;
+  els.colsInc.disabled = state.cols >= MAX_N;
+}
+
+els.rowsDec.addEventListener("click", () => setDims(state.rows - 1, state.cols));
+els.rowsInc.addEventListener("click", () => setDims(state.rows + 1, state.cols));
+els.colsDec.addEventListener("click", () => setDims(state.rows, state.cols - 1));
+els.colsInc.addEventListener("click", () => setDims(state.rows, state.cols + 1));
+
+els.clearBtn.addEventListener("click", () => {
+  state.blocked = new Set();
+  state.route = null;
+  renderGrid();
+  updateNote();
+  scheduleCompute();
+});
+
+els.randomizeBtn.addEventListener("click", () => {
+  const total = state.rows * state.cols;
+  const targetHoles = Math.max(1, Math.round(total * (0.08 + Math.random() * 0.14)));
+  const all = [];
+  for (let r = 0; r < state.rows; r++) for (let c = 0; c < state.cols; c++) all.push(r + "," + c);
+  for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
+  state.blocked = new Set(all.slice(0, Math.min(targetHoles, total - 1)));
+  state.route = null;
+  renderGrid();
+  updateNote();
+  scheduleCompute();
+});
+
+/* ---------------- computation orchestration ---------------- */
+let computeDebounceTimer = null;
+let computeStartTime = 0;
+let elapsedTimer = null;
+
+function scheduleCompute(delay) {
+  if (computeDebounceTimer) clearTimeout(computeDebounceTimer);
+  computeDebounceTimer = setTimeout(runCompute, delay === undefined ? 350 : delay);
+}
+
+function runCompute() {
+  spawnWorker();
+  currentRequestId += 1;
+  const id = currentRequestId;
+  els.pathsValue.textContent = "—";
+  els.cyclesValue.textContent = "—";
+  els.pathsValue.className = "stat-value path tnum mono";
+  els.cyclesValue.className = "stat-value cycle tnum mono";
+  els.progressWrap.style.display = "";
+  els.timingNote.style.display = "none";
+  computeStartTime = performance.now();
+  if (elapsedTimer) clearInterval(elapsedTimer);
+  elapsedTimer = setInterval(() => {
+    const secs = ((performance.now() - computeStartTime) / 1000).toFixed(1);
+    els.progressNote.textContent = `counting… ${secs}s`;
+  }, 100);
+  els.progressNote.textContent = "counting…";
+
+  worker.postMessage({
+    id,
+    type: "count",
+    rows: state.rows,
+    cols: state.cols,
+    blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
+  });
+}
+
+function fmtBig(str) {
+  const neg = str.startsWith("-");
+  const s = neg ? str.slice(1) : str;
+  const withCommas = s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return (neg ? "-" : "") + withCommas;
+}
+
+function handleWorkerMessage(e) {
+  const msg = e.data;
+  if (msg.id !== currentRequestId) return; // stale response, ignore
+
+  if (msg.type === "count-partial") {
+    const isZero = msg.value === "0";
+    if (msg.metric === "cycles") {
+      els.cyclesValue.textContent = fmtBig(msg.value);
+      els.cyclesValue.classList.toggle("zero", isZero);
+    } else {
+      els.pathsValue.textContent = fmtBig(msg.value);
+      els.pathsValue.classList.toggle("zero", isZero);
+    }
+  } else if (msg.type === "count-done") {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    els.progressWrap.style.display = "none";
+    const totalMs = performance.now() - computeStartTime;
+    els.timingNote.style.display = "";
+    els.timingNote.textContent = `computed in ${(totalMs / 1000).toFixed(totalMs > 1000 ? 1 : 2)}s`;
+    window.__computeDoneCount = (window.__computeDoneCount || 0) + 1;
+  } else if (msg.type === "search-done") {
+    if (msg.result) {
+      state.route = { cells: msg.result, mode: msg.mode };
+      renderGrid();
+    } else {
+      state.route = null;
+      renderGrid();
+      els.gridNote.insertAdjacentHTML("beforeend", ` <span class="chip warn">no ${msg.mode === "cycle" ? "cycle" : "path"} exists for this shape</span>`);
+    }
+    setSearchButtonsEnabled(true);
+  } else if (msg.type === "error") {
+    els.progressWrap.style.display = "none";
+    console.error("worker error:", msg.message);
+  }
+}
+
+function setSearchButtonsEnabled(on) {
+  els.showPathBtn.disabled = !on;
+  els.showCycleBtn.disabled = !on;
+}
+
+function requestExample(mode) {
+  spawnWorkerIfNeeded();
+  currentRequestId += 1;
+  const id = currentRequestId;
+  setSearchButtonsEnabled(false);
+  worker.postMessage({
+    id,
+    type: "search",
+    rows: state.rows,
+    cols: state.cols,
+    blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
+    mode,
+    seed: Math.floor(Math.random() * 2 ** 31),
+  });
+}
+function spawnWorkerIfNeeded() {
+  if (!worker) spawnWorker();
+}
+
+els.showPathBtn.addEventListener("click", () => requestExample("path"));
+els.showCycleBtn.addEventListener("click", () => requestExample("cycle"));
+
+/* ============================== Reference chart ============================== */
+const REFERENCE_DATA = [
+  { n: 2, paths: 4, cycles: 1 },
+  { n: 3, paths: 20, cycles: 0 },
+  { n: 4, paths: 276, cycles: 6 },
+  { n: 5, paths: 4324, cycles: 0 },
+  { n: 6, paths: 229348, cycles: 1072 },
+  { n: 7, paths: 13535280, cycles: 0 },
+  { n: 8, paths: 3023313284, cycles: 4638576 },
+  { n: 9, paths: 745416341496, cycles: 0 },
+  { n: 10, paths: 730044829512632, cycles: 467260456608 },
+];
+
+function renderChart() {
+  const svg = document.getElementById("chart-svg");
+  const ns = "http://www.w3.org/2000/svg";
+  const W = 820, H = 360;
+  const margin = { top: 16, right: 24, bottom: 40, left: 56 };
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  svg.innerHTML = "";
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+  const minLog = 0; // log10(1)
+  const maxVal = Math.max(...REFERENCE_DATA.map((d) => d.paths));
+  const maxLog = Math.ceil(Math.log10(maxVal));
+
+  function xFor(n) { return margin.left + ((n - 2) / (10 - 2)) * plotW; }
+  function yFor(v) {
+    const lv = v <= 0 ? 0 : Math.log10(v);
+    return margin.top + plotH - (lv / maxLog) * plotH;
+  }
+
+  const g = document.createElementNS(ns, "g");
+  svg.appendChild(g);
+
+  // horizontal gridlines at each power of ten
+  for (let p = 0; p <= maxLog; p++) {
+    const y = yFor(Math.pow(10, p));
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", margin.left); line.setAttribute("x2", W - margin.right);
+    line.setAttribute("y1", y); line.setAttribute("y2", y);
+    line.setAttribute("class", "grid-line-h");
+    g.appendChild(line);
+    const label = document.createElementNS(ns, "text");
+    label.setAttribute("x", margin.left - 10); label.setAttribute("y", y + 3.5);
+    label.setAttribute("text-anchor", "end");
+    label.setAttribute("class", "axis-label");
+    label.textContent = p === 0 ? "1" : `10${superscript(p)}`;
+    g.appendChild(label);
+  }
+
+  // x axis
+  const axisLine = document.createElementNS(ns, "line");
+  axisLine.setAttribute("x1", margin.left); axisLine.setAttribute("x2", W - margin.right);
+  axisLine.setAttribute("y1", margin.top + plotH); axisLine.setAttribute("y2", margin.top + plotH);
+  axisLine.setAttribute("class", "axis-line");
+  g.appendChild(axisLine);
+
+  for (const d of REFERENCE_DATA) {
+    const x = xFor(d.n);
+    const label = document.createElementNS(ns, "text");
+    label.setAttribute("x", x); label.setAttribute("y", margin.top + plotH + 20);
+    label.setAttribute("text-anchor", "middle");
+    label.setAttribute("class", "axis-label");
+    label.textContent = d.n + "×" + d.n;
+    g.appendChild(label);
+  }
+
+  // highlight current grid size if square and within range
+  if (state.rows === state.cols && state.rows >= 2 && state.rows <= 10) {
+    const x = xFor(state.rows);
+    const vline = document.createElementNS(ns, "line");
+    vline.setAttribute("x1", x); vline.setAttribute("x2", x);
+    vline.setAttribute("y1", margin.top); vline.setAttribute("y2", margin.top + plotH);
+    vline.setAttribute("class", "current-n-line");
+    g.appendChild(vline);
+    const vlabel = document.createElementNS(ns, "text");
+    vlabel.setAttribute("x", x); vlabel.setAttribute("y", margin.top - 4);
+    vlabel.setAttribute("text-anchor", "middle");
+    vlabel.setAttribute("class", "current-n-label");
+    vlabel.textContent = "current";
+    g.appendChild(vlabel);
+  }
+
+  drawSeries(g, ns, "paths", "var(--accent-path)", xFor, yFor);
+  drawSeries(g, ns, "cycles", "var(--accent-cycle)", xFor, yFor);
+
+  function drawSeries(g, ns, key, color, xFor, yFor) {
+    let d = "";
+    REFERENCE_DATA.forEach((pt, i) => {
+      const x = xFor(pt.n), y = yFor(Math.max(pt[key], 0.6));
+      d += (i === 0 ? "M " : "L ") + x + " " + y + " ";
+    });
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d.trim());
+    path.setAttribute("class", "chart-line");
+    path.setAttribute("stroke", color);
+    g.appendChild(path);
+
+    REFERENCE_DATA.forEach((pt) => {
+      const x = xFor(pt.n), y = yFor(Math.max(pt[key], 0.6));
+      const dot = document.createElementNS(ns, "circle");
+      dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", 4.5);
+      dot.setAttribute("fill", color);
+      dot.setAttribute("class", "chart-dot");
+      dot.style.cursor = "pointer";
+      dot.addEventListener("mousemove", (evt) => showTooltip(evt, pt, key));
+      dot.addEventListener("mouseleave", hideTooltip);
+      dot.addEventListener("focus", (evt) => showTooltip(evt, pt, key));
+      dot.addEventListener("blur", hideTooltip);
+      dot.setAttribute("tabindex", "0");
+      g.appendChild(dot);
+    });
+  }
+}
+
+function superscript(n) {
+  const map = { 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" };
+  return String(n).split("").map((d) => map[d]).join("");
+}
+
+function showTooltip(evt, pt, key) {
+  const tip = els.tooltip;
+  const label = key === "paths" ? "Hamiltonian paths" : "Hamiltonian cycles";
+  tip.innerHTML = `${pt.n}×${pt.n} &middot; ${label}<br><strong>${fmtBig(String(pt[key]))}</strong>`;
+  const rect = (evt.target.closest("svg")).getBoundingClientRect();
+  const cx = evt.clientX !== undefined ? evt.clientX : rect.left + Number(evt.target.getAttribute("cx"));
+  tip.style.left = (evt.clientX !== undefined ? evt.clientX : rect.left) + "px";
+  tip.style.top = (evt.clientY !== undefined ? evt.clientY : rect.top) + "px";
+  tip.classList.add("show");
+}
+function hideTooltip() { els.tooltip.classList.remove("show"); }
+
+/* ============================== Boot ============================== */
+function boot() {
+  els.rowsVal.textContent = state.rows;
+  els.colsVal.textContent = state.cols;
+  updateStepperDisabled();
+  renderGrid();
+  updateNote();
+  renderChart();
+  runCompute();
+  // Hero moment: trace an example cycle automatically once the page loads.
+  setTimeout(() => requestExample("cycle"), 550);
+}
+boot();
+</script>
+
+</body>
+</html>
