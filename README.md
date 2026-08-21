@@ -145,6 +145,23 @@ which has no such failure mode). For a cycle, only "start" applies, and it
 just rotates which cell the trace is drawn from, since a cycle has no
 true endpoints.
 
+There's also a **"rank by number of turns"** panel showing the top 10
+solutions with the fewest (or most) turns -- a cell counts as a turn when
+exactly two of its edges are present and they aren't a straight
+up-down/left-right pair. This is a *k*-best extension of the same DP: instead
+of tracking one completion count per boundary state, the backward pass keeps
+the *K* smallest (or largest) distinct turn-count totals per state, each
+with its own count, and truncating to the top *K* at every step is exact --
+not an approximation -- by the same exchange argument that underlies
+k-shortest-path algorithms. A blocked-cell edge case (its transition wasn't
+chaining into the child state's rank list, so blocked cells were silently
+treated as untraversable) turned up during code review of the first draft
+and was fixed before it ever ran; the shipped version was then exhaustively
+checked against brute-force enumeration across grids with holes, blocked
+cells, and endpoint constraints, all passing. The ranking metric is
+factored out into a single local function (`isTurn`), so it's a small change
+to add other ranking categories later.
+
 ## Project layout
 
 ```
