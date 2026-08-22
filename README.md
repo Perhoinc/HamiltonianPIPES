@@ -116,51 +116,60 @@ An example Hamiltonian path on a plus-shaped grid with blocked corners
 [`web/hamilton-loom.html`](web/hamilton-loom.html) is a self-contained, no-install
 GUI: open it in any browser to click cells to cut holes into a grid, see the
 exact path/cycle counts update live, and watch an example route trace itself
-onto the grid. It's a JavaScript port of the same broken-profile DP and
-Warnsdorff-search algorithms as the Python package (validated against the
-Python implementation's outputs, including the full 10x10 case), running in
-a Web Worker so the page stays responsive during a multi-second count. No
-build step or server needed — just open the file.
+onto the grid. It's a JavaScript port of the same broken-profile DP as the
+Python package (validated against the Python implementation's outputs,
+including the full 10x10 case), running in a Web Worker so the page stays
+responsive during a multi-second count. No build step or server needed —
+just open the file.
 
-It also supports **browsing solutions by number** instead of only random
-ones: "Browse paths"/"Browse cycles" shows "Solution *k* of *total*" with
-Prev/Next and a jump-to-# field. This extends the DP into an *unranking*
-algorithm — given index *k*, it reconstructs the exact *k*-th solution
-directly (via a one-time forward+backward pass building per-step
-completion counts), rather than generating and discarding the ones before
-it. Exhaustively verified against brute-force enumeration (every index,
-not a sample) across dozens of grid shapes before shipping.
+Solutions are explored through a single **"Browse solutions"** panel with an
+order-by control -- "Any order" / "Fewest turns" / "Most turns" -- that
+determines what "Browse paths"/"Browse cycles" shows, so there's one set of
+buttons rather than separate browsing and ranking tools:
+
+- **Any order** shows "Solution *k* of *total*" with Prev/Next, a jump-to-#
+  field, and a Random button. This extends the DP into an *unranking*
+  algorithm — given index *k*, it reconstructs the exact *k*-th solution
+  directly (via a one-time forward+backward pass building per-step
+  completion counts), rather than generating and discarding the ones
+  before it, so Prev/Next, jump, and Random all stay exact and instant even
+  with hundreds of trillions of solutions. Random draws a uniformly random
+  index and reconstructs that one solution directly — there's no separate
+  heuristic search for "just find me one" anymore; exact browsing already
+  covers that case, and does it exactly instead of approximately.
+- **Fewest/most turns** shows the top 10 solutions ranked by turn count — a
+  cell counts as a turn when exactly two of its edges are present and
+  they aren't a straight up-down/left-right pair. This is a *k*-best
+  extension of the same DP: instead of tracking one completion count per
+  boundary state, the backward pass keeps the *K* smallest (or largest)
+  distinct turn-count totals per state, each with its own count, and
+  truncating to the top *K* at every step is exact — not an approximation
+  — by the same exchange argument that underlies k-shortest-path
+  algorithms. The ranking metric is factored out into a single local
+  function (`isTurn`), so it's a small change to add other ranking
+  categories later.
+
+Exhaustively verified against brute-force enumeration — every index, not a
+sample, across dozens of grid shapes for browsing, and across grids with
+holes, blocked cells, and endpoint constraints for ranking — before
+shipping. (A blocked-cell edge case in the ranking DP's first draft, where
+a transition wasn't chaining into the child state's rank list, was caught
+in code review and fixed before it ever ran.)
 
 You can also **pick a start and/or end cell** ("Pick start / end" mode):
-the exact count, browsing, and random search all then respect that
-constraint (paths from A to B, or just starting at A). This is a real
-algorithm change, not just a filter -- a designated cell is forced to be a
-path endpoint and every other cell is forbidden from being one, which
-required extending the DP's transition rules, the unranking walk, *and*
-the fast random search (whose naive endpoint-reservation approach turned
-out to be unreliable -- it was verified against the exact DP and found to
-report "no path" for cases with hundreds of valid solutions, so fixed
-start+end pairs are routed through the exact indexed system instead,
-which has no such failure mode). For a cycle, only "start" applies, and it
-just rotates which cell the trace is drawn from, since a cycle has no
-true endpoints.
-
-There's also a **"rank by number of turns"** panel showing the top 10
-solutions with the fewest (or most) turns -- a cell counts as a turn when
-exactly two of its edges are present and they aren't a straight
-up-down/left-right pair. This is a *k*-best extension of the same DP: instead
-of tracking one completion count per boundary state, the backward pass keeps
-the *K* smallest (or largest) distinct turn-count totals per state, each
-with its own count, and truncating to the top *K* at every step is exact --
-not an approximation -- by the same exchange argument that underlies
-k-shortest-path algorithms. A blocked-cell edge case (its transition wasn't
-chaining into the child state's rank list, so blocked cells were silently
-treated as untraversable) turned up during code review of the first draft
-and was fixed before it ever ran; the shipped version was then exhaustively
-checked against brute-force enumeration across grids with holes, blocked
-cells, and endpoint constraints, all passing. The ranking metric is
-factored out into a single local function (`isTurn`), so it's a small change
-to add other ranking categories later.
+the exact count and browsing both then respect that constraint (paths from
+A to B, or just starting at A). This is a real algorithm change, not just a
+filter -- a designated cell is forced to be a path endpoint and every other
+cell is forbidden from being one, which required extending the DP's
+transition rules and the unranking walk. There used to also be a fast
+Warnsdorff-search path for picking one random solution, but its naive
+endpoint-reservation approach turned out to be unreliable with two fixed
+endpoints (verified against the exact DP: it reported "no path" for cases
+with hundreds of valid solutions) — it's since been removed entirely in
+favor of always routing through the exact indexed system above, which has
+no such failure mode for any number of fixed endpoints. For a cycle, only
+"start" applies, and it just rotates which cell the trace is drawn from,
+since a cycle has no true endpoints.
 
 ## Project layout
 

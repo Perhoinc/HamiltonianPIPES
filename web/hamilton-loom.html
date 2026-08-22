@@ -453,7 +453,6 @@
 
 </head>
 <body>
-
 <div class="theme-toggle" role="group" aria-label="Theme">
   <button id="theme-system" type="button" aria-pressed="true">Auto</button>
   <button id="theme-light" type="button" aria-pressed="false">Light</button>
@@ -526,14 +525,15 @@
       </div>
       <div class="compute-note" id="timing-note" style="display:none;"></div>
 
-      <div class="example-row">
-        <button type="button" class="btn accent-path" id="btn-show-path">Random path</button>
-        <button type="button" class="btn accent-cycle" id="btn-show-cycle">Random cycle</button>
-      </div>
       <div class="route-caption" id="route-caption"></div>
 
       <div class="browse-block">
-        <div class="browse-label">Browse solutions by number</div>
+        <div class="browse-label">Browse solutions</div>
+        <div class="mode-row" role="group" aria-label="Order solutions by">
+          <button type="button" class="mode-btn" id="order-any" aria-pressed="true">Any order</button>
+          <button type="button" class="mode-btn" id="order-min-turns" aria-pressed="false">Fewest turns</button>
+          <button type="button" class="mode-btn" id="order-max-turns" aria-pressed="false">Most turns</button>
+        </div>
         <div class="example-row">
           <button type="button" class="btn accent-path" id="btn-browse-path">Browse paths</button>
           <button type="button" class="btn accent-cycle" id="btn-browse-cycle">Browse cycles</button>
@@ -548,24 +548,11 @@
           </form>
           <button type="button" class="btn" id="nav-random-btn">Random</button>
         </div>
-        <div class="compute-note" id="nav-status" style="display:none;"></div>
-      </div>
-
-      <div class="browse-block">
-        <div class="browse-label">Rank by number of turns</div>
-        <div class="mode-row" role="group" aria-label="Rank direction">
-          <button type="button" class="mode-btn" id="rank-dir-min" aria-pressed="true">Fewest turns</button>
-          <button type="button" class="mode-btn" id="rank-dir-max" aria-pressed="false">Most turns</button>
-        </div>
-        <div class="example-row">
-          <button type="button" class="btn accent-path" id="btn-rank-path">Rank paths</button>
-          <button type="button" class="btn accent-cycle" id="btn-rank-cycle">Rank cycles</button>
-        </div>
         <ol class="rank-list" id="rank-list" style="display:none;"></ol>
-        <div class="compute-note" id="rank-status" style="display:none;"></div>
+        <div class="compute-note" id="browse-status" style="display:none;"></div>
       </div>
 
-      <p class="method-note">Counted exactly with a "broken-profile" dynamic program that sweeps the grid once, tracking which cells still have a dangling connection — no route is ever built and thrown away, so it stays fast even when there are trillions of them. Browsing by number works the same way, in reverse: it can reconstruct the exact k-th solution directly, without generating the ones before it. Ranking by turns uses the same idea again, extended to track the best few distinct turn-counts reachable from every point in the sweep, so the top 10 come out directly rather than by sorting the full set. Cross-checked against brute-force enumeration and against <a href="https://oeis.org/A096969" style="color:inherit" target="_blank" rel="noopener">OEIS A096969</a> / <a href="https://oeis.org/A003763" style="color:inherit" target="_blank" rel="noopener">A003763</a>.</p>
+      <p class="method-note">Counted exactly with a "broken-profile" dynamic program that sweeps the grid once, tracking which cells still have a dangling connection — no route is ever built and thrown away, so it stays fast even when there are trillions of them. "Any order" browses by number: it can reconstruct the exact k-th solution directly, without generating the ones before it, so Prev/Next/jump-to-# and Random all work even when there are hundreds of trillions of solutions. "Fewest/most turns" uses the same idea again, extended to track the best few distinct turn-counts reachable from every point in the sweep, so the top 10 come out directly rather than by sorting the full set. Cross-checked against brute-force enumeration and against <a href="https://oeis.org/A096969" style="color:inherit" target="_blank" rel="noopener">OEIS A096969</a> / <a href="https://oeis.org/A003763" style="color:inherit" target="_blank" rel="noopener">A003763</a>.</p>
     </section>
   </div>
 
@@ -1108,99 +1095,6 @@ function topRankedExamples(idx, n) {
   return out;
 }
 
-/* ---- fast single-solution search (Warnsdorff + connectivity pruning) ---- */
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function () {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-function shuffleInPlace(arr, rng) {
-  for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp; }
-}
-class BitSet {
-  constructor(n) { this.n = n; this.words = new Int32Array(Math.ceil(n / 32) || 1); }
-  clone() { const b = new BitSet(this.n); b.words.set(this.words); return b; }
-  set(i) { this.words[i >> 5] |= (1 << (i & 31)); }
-  has(i) { return (this.words[i >> 5] & (1 << (i & 31))) !== 0; }
-  static fromBit(n, i) { const b = new BitSet(n); b.set(i); return b; }
-}
-function findOneSolution(rows, cols, blockedArr, wantCycle, seed, forceStart) {
-  const blocked = new Set(blockedArr.map(([r, c]) => r + "," + c));
-  const grid = { rows, cols, blocked };
-  const cells = [], index = new Map();
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (!blocked.has(r + "," + c)) { index.set(r + "," + c, cells.length); cells.push([r, c]); }
-  const n = cells.length;
-  if (n === 0) return null;
-  const forceStartIdx = forceStart ? index.get(forceStart[0] + "," + forceStart[1]) : undefined;
-  if (forceStart && forceStartIdx === undefined) return null;
-  if (n === 1) return wantCycle ? null : [cells[0]];
-  if (wantCycle && n < 4) return null;
-  const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-  const neighborLists = cells.map(([r, c]) => {
-    const out = [];
-    for (const [dr, dc] of DIRS) { const key = (r + dr) + "," + (c + dc); if (index.has(key)) out.push(index.get(key)); }
-    return out;
-  });
-  const rng = mulberry32(seed >>> 0);
-  let startOrder;
-  if (forceStartIdx !== undefined) {
-    startOrder = [forceStartIdx];
-  } else {
-    startOrder = [...Array(n).keys()];
-    shuffleInPlace(startOrder, rng);
-  }
-  function remainingConnected(visited, frm) {
-    let remainingCount = 0;
-    for (let i = 0; i < n; i++) if (!visited.has(i)) remainingCount++;
-    if (remainingCount === 0) return true;
-    const seen = new BitSet(n);
-    const stack = [];
-    for (const nb of neighborLists[frm]) if (!visited.has(nb) && !seen.has(nb)) { seen.set(nb); stack.push(nb); }
-    let seenCount = stack.length;
-    while (stack.length) {
-      const cur = stack.pop();
-      for (const nb of neighborLists[cur]) if (!visited.has(nb) && !seen.has(nb)) { seen.set(nb); stack.push(nb); seenCount++; }
-    }
-    return seenCount === remainingCount;
-  }
-  function onwardDegree(idx, visited) { let d = 0; for (const nb of neighborLists[idx]) if (!visited.has(nb)) d++; return d; }
-  function dfs(pos, visited, path, startNeighborSet) {
-    if (path.length === n) { if (!wantCycle) return path.slice(); return neighborLists[pos].includes(path[0]) ? path.slice() : null; }
-    let candidates = neighborLists[pos].filter((idx) => !visited.has(idx));
-    if (candidates.length === 0) return null;
-    shuffleInPlace(candidates, rng);
-    if (wantCycle) {
-      candidates.sort((a, b) => {
-        const aStart = startNeighborSet.has(a) ? 1 : 0, bStart = startNeighborSet.has(b) ? 1 : 0;
-        if (aStart !== bStart) return aStart - bStart;
-        return onwardDegree(a, visited) - onwardDegree(b, visited);
-      });
-    } else {
-      candidates.sort((a, b) => onwardDegree(a, visited) - onwardDegree(b, visited));
-    }
-    for (const nxt of candidates) {
-      const newVisited = visited.clone(); newVisited.set(nxt);
-      if (!remainingConnected(newVisited, nxt)) continue;
-      path.push(nxt);
-      const result = dfs(nxt, newVisited, path, startNeighborSet);
-      if (result) return result;
-      path.pop();
-    }
-    return null;
-  }
-  for (const start of startOrder) {
-    const visited = BitSet.fromBit(n, start);
-    const startNeighborSet = new Set(neighborLists[start]);
-    const result = dfs(start, visited, [start], startNeighborSet);
-    if (result) return result.map((i) => cells[i]);
-  }
-  return null;
-}
-
 const navCache = new Map(); // "rows|cols|blockedSorted|mode|designatedSorted" -> index object (or null)
 const rankCache = new Map(); // same key + "|" + direction -> ranking object (or null)
 
@@ -1235,7 +1129,7 @@ function rotateCycleToStart(cells, startCell) {
 }
 
 self.onmessage = function (e) {
-  const { id, type, rows, cols, blocked, mode, seed, index, startCell, endCell, designated, direction, count } = e.data;
+  const { id, type, rows, cols, blocked, mode, index, startCell, designated, direction, count } = e.data;
   try {
     if (type === "count") {
       const t0 = performance.now();
@@ -1245,22 +1139,6 @@ self.onmessage = function (e) {
       const paths = countStructures(bestOrientation(rows, cols, blocked), "path", orientDesignated(designated, cols > rows));
       self.postMessage({ id, type: "count-partial", metric: "paths", value: paths.toString(), ms: performance.now() - t1 });
       self.postMessage({ id, type: "count-done" });
-    } else if (type === "search") {
-      // Path mode with BOTH ends fixed always goes through "nav" instead
-      // (see main-thread orchestration) -- the heuristic search here is
-      // only reliable with at most one forced cell.
-      let result;
-      if (mode === "cycle") {
-        result = findOneSolution(rows, cols, blocked, true, seed, startCell || null);
-      } else if (startCell) {
-        result = findOneSolution(rows, cols, blocked, false, seed, startCell);
-      } else if (endCell) {
-        result = findOneSolution(rows, cols, blocked, false, seed, endCell);
-        if (result) result = result.slice().reverse();
-      } else {
-        result = findOneSolution(rows, cols, blocked, false, seed, null);
-      }
-      self.postMessage({ id, type: "search-done", mode, result });
     } else if (type === "nav") {
       const cacheKey = rows + "|" + cols + "|" + blocked.map((p) => p.join(",")).sort().join(";") + "|" + mode + "|" + designatedCacheKey(designated);
       let idx = navCache.get(cacheKey);
@@ -1318,10 +1196,9 @@ function spawnWorker() {
   // About to orphan the current worker (and whatever request it's mid-way
   // through) -- re-enable anything that was waiting on it, so a button
   // toggled mid-request (e.g. the debounced grid recompute firing while a
-  // "random path" or "browse" request is in flight) can never get stuck
-  // disabled forever.
-  setSearchButtonsEnabled(true);
-  setNavControlsEnabled(true);
+  // "browse" or "rank" request is in flight) can never get stuck disabled
+  // forever.
+  setBrowseControlsEnabled(true);
   if (worker) { try { worker.terminate(); } catch (e) {} }
   const blob = new Blob([WORKER_SRC], { type: "text/javascript" });
   worker = new Worker(URL.createObjectURL(blob));
@@ -1337,10 +1214,10 @@ const state = {
   route: null, // { cells: [[r,c],...], mode: "path"|"cycle" }
   browseMode: null, // null | "path" | "cycle" -- which mode the nav toolbar is showing
   browseTotal: { path: null, cycle: null }, // BigInt totals once known, per mode
+  browseOrder: "any", // "any" | "min" | "max" -- which sweep populates the results below
   editMode: "cells", // "cells" | "endpoints"
   startCell: null, // [r,c] or null
   endCell: null, // [r,c] or null (path mode only; ignored for cycles)
-  rankDirection: "min", // "min" | "max"
   rankEntries: null, // [{turns, cells}, ...] once computed
   rankActiveIndex: null, // which rankEntries row is currently shown on the grid
   rankMode: null, // "path" | "cycle" -- which mode rankEntries is for
@@ -1363,9 +1240,10 @@ const els = {
   progressWrap: document.getElementById("progress-wrap"),
   progressNote: document.getElementById("progress-note"),
   timingNote: document.getElementById("timing-note"),
-  showPathBtn: document.getElementById("btn-show-path"),
-  showCycleBtn: document.getElementById("btn-show-cycle"),
   routeCaption: document.getElementById("route-caption"),
+  orderAnyBtn: document.getElementById("order-any"),
+  orderMinBtn: document.getElementById("order-min-turns"),
+  orderMaxBtn: document.getElementById("order-max-turns"),
   browsePathBtn: document.getElementById("btn-browse-path"),
   browseCycleBtn: document.getElementById("btn-browse-cycle"),
   navRow: document.getElementById("nav-row"),
@@ -1375,7 +1253,7 @@ const els = {
   navJumpForm: document.getElementById("nav-jump-form"),
   navJumpInput: document.getElementById("nav-jump-input"),
   navRandomBtn: document.getElementById("nav-random-btn"),
-  navStatus: document.getElementById("nav-status"),
+  browseStatus: document.getElementById("browse-status"),
   tooltip: document.getElementById("tooltip"),
   modeCellsBtn: document.getElementById("mode-cells"),
   modeEndpointsBtn: document.getElementById("mode-endpoints"),
@@ -1386,12 +1264,7 @@ const els = {
   endpointsNote: document.getElementById("endpoints-note"),
   resultsSub: document.getElementById("results-sub"),
   pathsLabel: document.getElementById("paths-label"),
-  rankDirMinBtn: document.getElementById("rank-dir-min"),
-  rankDirMaxBtn: document.getElementById("rank-dir-max"),
-  rankPathBtn: document.getElementById("btn-rank-path"),
-  rankCycleBtn: document.getElementById("btn-rank-cycle"),
   rankList: document.getElementById("rank-list"),
-  rankStatus: document.getElementById("rank-status"),
 };
 
 function fmtCell([r, c]) { return `(${r + 1}, ${c + 1})`; }
@@ -1622,10 +1495,9 @@ function resetRoute() {
   state.rankMode = null;
   els.routeCaption.textContent = "";
   els.navRow.style.display = "none";
-  els.navStatus.style.display = "none";
   els.rankList.style.display = "none";
   els.rankList.innerHTML = "";
-  els.rankStatus.style.display = "none";
+  els.browseStatus.style.display = "none";
 }
 
 function onCellToggle(e) {
@@ -1809,96 +1681,83 @@ function handleWorkerMessage(e) {
     els.timingNote.style.display = "";
     els.timingNote.textContent = `computed in ${(totalMs / 1000).toFixed(totalMs > 1000 ? 1 : 2)}s`;
     window.__computeDoneCount = (window.__computeDoneCount || 0) + 1;
-  } else if (msg.type === "search-done") {
-    if (msg.result) {
-      state.route = { cells: msg.result, mode: msg.mode, index: null, total: null };
-      state.browseMode = null;
-      els.navRow.style.display = "none";
-      els.navStatus.style.display = "none";
-      els.routeCaption.textContent = `Showing a random ${msg.mode}${constraintPhrase(msg.mode)}.`;
-      renderGrid();
-    } else {
-      resetRoute();
-      renderGrid();
-      els.gridNote.insertAdjacentHTML("beforeend", ` <span class="chip warn">no ${msg.mode === "cycle" ? "cycle" : "path"}${constraintPhrase(msg.mode)} exists</span>`);
-    }
-    setSearchButtonsEnabled(true);
   } else if (msg.type === "nav-building") {
+    els.rankList.style.display = "none";
     els.navRow.style.display = "";
     els.navReadout.textContent = "preparing…";
-    els.navStatus.style.display = "";
-    els.navStatus.textContent = "preparing solution browser… (one-time per grid, can take a while on large grids)";
-    setNavControlsEnabled(false);
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = "preparing solution browser… (one-time per grid, can take a while on large grids)";
+    setBrowseControlsEnabled(false);
   } else if (msg.type === "nav-empty") {
-    els.navStatus.style.display = "";
-    els.navStatus.textContent = `no ${msg.mode === "cycle" ? "cycles" : "paths"}${constraintPhrase(msg.mode)} exist — nothing to browse.`;
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = `no ${msg.mode === "cycle" ? "cycles" : "paths"}${constraintPhrase(msg.mode)} exist — nothing to browse.`;
     els.navRow.style.display = "none";
-    setNavControlsEnabled(true);
+    setBrowseControlsEnabled(true);
   } else if (msg.type === "nav-result") {
     const total = BigInt(msg.total);
     const index = BigInt(msg.index);
     state.route = { cells: msg.cells, mode: msg.mode, index, total };
     state.browseMode = msg.mode;
     state.browseTotal[msg.mode] = total;
-    els.navStatus.style.display = "none";
+    els.browseStatus.style.display = "none";
+    els.rankList.style.display = "none";
     els.navRow.style.display = "";
     els.routeCaption.textContent = "";
     els.navReadout.textContent = `Solution ${fmtBig((index + 1n).toString())} of ${fmtBig(total.toString())}${constraintPhrase(msg.mode)}`;
     els.navJumpInput.value = "";
     els.navJumpInput.placeholder = fmtBig((index + 1n).toString());
-    setNavControlsEnabled(true);
+    setBrowseControlsEnabled(true);
     els.navPrev.disabled = index === 0n;
     els.navNext.disabled = index === total - 1n;
     renderGrid();
     window.__navResultCount = (window.__navResultCount || 0) + 1;
   } else if (msg.type === "rank-building") {
+    els.navRow.style.display = "none";
     els.rankList.style.display = "none";
-    els.rankStatus.style.display = "";
-    els.rankStatus.textContent = "ranking… (one-time per grid, can take a while on large grids)";
-    setRankControlsEnabled(false);
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = "ranking… (one-time per grid, can take a while on large grids)";
+    setBrowseControlsEnabled(false);
   } else if (msg.type === "rank-empty") {
-    els.rankStatus.style.display = "";
-    els.rankStatus.textContent = `no ${msg.mode === "cycle" ? "cycles" : "paths"}${constraintPhrase(msg.mode)} exist — nothing to rank.`;
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = `no ${msg.mode === "cycle" ? "cycles" : "paths"}${constraintPhrase(msg.mode)} exist — nothing to rank.`;
     els.rankList.style.display = "none";
-    setRankControlsEnabled(true);
+    setBrowseControlsEnabled(true);
   } else if (msg.type === "rank-result") {
     state.rankEntries = msg.entries;
     state.rankActiveIndex = null;
     state.rankMode = msg.mode;
-    els.rankStatus.style.display = "none";
+    els.browseStatus.style.display = "none";
+    els.navRow.style.display = "none";
     renderRankList();
-    setRankControlsEnabled(true);
+    setBrowseControlsEnabled(true);
     window.__rankResultCount = (window.__rankResultCount || 0) + 1;
   } else if (msg.type === "error") {
     els.progressWrap.style.display = "none";
-    els.navStatus.style.display = "";
-    els.navStatus.textContent = "something went wrong computing that — try a different grid.";
-    els.rankStatus.style.display = "";
-    els.rankStatus.textContent = "something went wrong computing that — try a different grid.";
-    setNavControlsEnabled(true);
-    setRankControlsEnabled(true);
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = "something went wrong computing that — try a different grid.";
+    setBrowseControlsEnabled(true);
     console.error("worker error:", msg.message);
   }
 }
 
-function setSearchButtonsEnabled(on) {
-  els.showPathBtn.disabled = !on;
-  els.showCycleBtn.disabled = !on;
-}
-
-function setNavControlsEnabled(on) {
+function setBrowseControlsEnabled(on) {
+  els.browsePathBtn.disabled = !on;
+  els.browseCycleBtn.disabled = !on;
   els.navPrev.disabled = !on;
   els.navNext.disabled = !on;
   els.navRandomBtn.disabled = !on;
   els.navJumpInput.disabled = !on;
-  els.browsePathBtn.disabled = !on;
-  els.browseCycleBtn.disabled = !on;
 }
 
-function setRankControlsEnabled(on) {
-  els.rankPathBtn.disabled = !on;
-  els.rankCycleBtn.disabled = !on;
+function setBrowseOrder(order) {
+  state.browseOrder = order;
+  els.orderAnyBtn.setAttribute("aria-pressed", String(order === "any"));
+  els.orderMinBtn.setAttribute("aria-pressed", String(order === "min"));
+  els.orderMaxBtn.setAttribute("aria-pressed", String(order === "max"));
 }
+els.orderAnyBtn.addEventListener("click", () => setBrowseOrder("any"));
+els.orderMinBtn.addEventListener("click", () => setBrowseOrder("min"));
+els.orderMaxBtn.addEventListener("click", () => setBrowseOrder("max"));
 
 function renderRankList() {
   const entries = state.rankEntries;
@@ -1927,7 +1786,7 @@ function showRankEntry(i) {
   state.route = { cells: entry.cells, mode: state.rankMode, index: null, total: null };
   state.browseMode = null;
   els.navRow.style.display = "none";
-  els.navStatus.style.display = "none";
+  els.browseStatus.style.display = "none";
   els.routeCaption.textContent = `#${i + 1} by turn count: ${entry.turns} turn${entry.turns === 1 ? "" : "s"}${constraintPhrase(state.rankMode)}.`;
   renderRankList();
   renderGrid();
@@ -1937,7 +1796,7 @@ function requestRank(mode) {
   spawnWorkerIfNeeded();
   currentRequestId += 1;
   const id = currentRequestId;
-  setRankControlsEnabled(false);
+  setBrowseControlsEnabled(false);
   worker.postMessage({
     id,
     type: "rank",
@@ -1947,53 +1806,14 @@ function requestRank(mode) {
     mode,
     designated: mode === "path" ? designatedCellsArray() : [],
     startCell: mode === "cycle" ? state.startCell : null,
-    direction: state.rankDirection,
+    direction: state.browseOrder,
     count: 10,
   });
 }
 
-function setRankDirection(dir) {
-  state.rankDirection = dir;
-  els.rankDirMinBtn.setAttribute("aria-pressed", String(dir === "min"));
-  els.rankDirMaxBtn.setAttribute("aria-pressed", String(dir === "max"));
-}
-els.rankDirMinBtn.addEventListener("click", () => setRankDirection("min"));
-els.rankDirMaxBtn.addEventListener("click", () => setRankDirection("max"));
-els.rankPathBtn.addEventListener("click", () => requestRank("path"));
-els.rankCycleBtn.addEventListener("click", () => requestRank("cycle"));
-
-function requestExample(mode) {
-  // With both a start AND an end fixed, the heuristic search isn't
-  // reliable enough to trust (verified against the exact DP -- see
-  // hamiltonian-endpoints validation) -- route through the exact indexed
-  // system instead, picking a uniform random valid solution. Below that
-  // (0 or 1 fixed cell), the fast heuristic is proven reliable.
-  if (mode === "path" && state.startCell && state.endCell) {
-    requestNav("path", "random");
-    return;
-  }
-  spawnWorkerIfNeeded();
-  currentRequestId += 1;
-  const id = currentRequestId;
-  setSearchButtonsEnabled(false);
-  worker.postMessage({
-    id,
-    type: "search",
-    rows: state.rows,
-    cols: state.cols,
-    blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
-    mode,
-    seed: Math.floor(Math.random() * 2 ** 31),
-    startCell: state.startCell,
-    endCell: mode === "path" ? state.endCell : null,
-  });
-}
 function spawnWorkerIfNeeded() {
   if (!worker) spawnWorker();
 }
-
-els.showPathBtn.addEventListener("click", () => requestExample("path"));
-els.showCycleBtn.addEventListener("click", () => requestExample("cycle"));
 
 /* ---------------- browse-by-number ---------------- */
 function randomBigIntBelow(total) {
@@ -2020,7 +1840,7 @@ function requestNav(mode, indexStr) {
   spawnWorkerIfNeeded();
   currentRequestId += 1;
   const id = currentRequestId;
-  setNavControlsEnabled(false);
+  setBrowseControlsEnabled(false);
   worker.postMessage({
     id,
     type: "nav",
@@ -2035,6 +1855,12 @@ function requestNav(mode, indexStr) {
 }
 
 function startBrowse(mode) {
+  // "Fewest/most turns" order goes through the ranking DP instead of the
+  // plain index browser -- same trigger buttons, different underlying query.
+  if (state.browseOrder !== "any") {
+    requestRank(mode);
+    return;
+  }
   // Resume where we left off for this mode if we have a known index already,
   // otherwise start at the first solution.
   const resume = state.browseMode === mode && state.route && state.route.index !== null;
