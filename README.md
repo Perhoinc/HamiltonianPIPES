@@ -149,12 +149,29 @@ buttons rather than separate browsing and ranking tools:
   function (`isTurn`), so it's a small change to add other ranking
   categories later.
 
+Ranked entries show their actual position in the "any order" enumeration too
+— e.g. "#2" on the fewest-turns list might read "Solution 146 of 1,072" — a
+rank position and a browse position are two labels on the *same* underlying
+solution, not two disconnected numbering systems where the best-by-turns
+solution would confusingly become "solution #1" in its own right. Finding
+that position is the unranking DP run in reverse: walk the same forward
+sweep, and at each cell pick the transition whose (down, right) edges agree
+with the already-known solution (up/left are already fixed by what was
+inherited from earlier cells, so this is never ambiguous — the DP only ever
+offers one transition per local edge pattern), summing the sizes of every
+transition skipped along the way; that running sum is exactly the
+solution's index once the sweep completes.
+
 Exhaustively verified against brute-force enumeration — every index, not a
 sample, across dozens of grid shapes for browsing, and across grids with
 holes, blocked cells, and endpoint constraints for ranking — before
 shipping. (A blocked-cell edge case in the ranking DP's first draft, where
 a transition wasn't chaining into the child state's rank list, was caught
-in code review and fixed before it ever ran.)
+in code review and fixed before it ever ran.) The rank-to-index lookup
+above was checked the same way: exhaustive index round-trips on several
+grid shapes, sampled round-trips across the full 229,348-path 6x6 space,
+and an end-to-end check of every ranked entry through the actual worker
+message protocol (not just the underlying functions directly).
 
 You can also **pick a start and/or end cell** ("Pick start / end" mode):
 the exact count and browsing both then respect that constraint (paths from
