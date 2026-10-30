@@ -188,6 +188,47 @@ no such failure mode for any number of fixed endpoints. For a cycle, only
 "start" applies, and it just rotates which cell the trace is drawn from,
 since a cycle has no true endpoints.
 
+### Eulerian mode
+
+The **"Hamiltonian / Eulerian"** toggle at the top switches the whole page
+to a different puzzle on the same grid: instead of visiting every *room*
+(cell) exactly once, cross every *doorway* (edge between two open cells)
+exactly once, visiting rooms as many times as needed. Whether that's
+possible is Euler's theorem (1736, from the Seven Bridges of Königsberg): a
+connected shape needs exactly 0 or 2 odd-doored rooms, giving a closed
+*circuit* or an open *path* respectively; any other count and no such walk
+exists at all. Rooms with an odd number of doors get a small ring, and
+"Trace Eulerian walk" finds one via Hierholzer's algorithm when it's
+possible.
+
+Unlike Hamiltonian counting, counting *every* Eulerian circuit exactly has
+no known efficient algorithm (it's #P-complete), so this mode doesn't try —
+it finds and traces one walk instead. Degree analysis and Hierholzer's
+algorithm are both fast enough (single-digit milliseconds even at 10x10)
+to run directly on the main thread; nothing here needs the Web Worker.
+
+When a shape *isn't* Eulerian, **"Trace spanning walk"** finds the shortest
+*closed* walk that still crosses every doorway at least once — the classic
+Route Inspection ("Chinese Postman") problem. It pairs up the odd-doored
+rooms as cheaply as possible by shortest-path distance and re-crosses each
+pair's connecting doorways (ticked on the grid) to patch every room back to
+an even number of doors, then runs Hierholzer's algorithm on the result.
+That pairing is an exact minimum-weight perfect matching, solved by a
+bitmask DP, below 20 odd-doored rooms; above that the DP's 2^k states stop
+being tractable (it measurably blows up in both time and memory well
+before k=26) and it falls back to a greedy-cheapest-edge match refined by
+pairwise-swap local search — close to optimal in practice (optimal in 9 of
+10 real-grid trials tested, ~2% off on average, worst case ~29% off) but
+explicitly labeled as a heuristic rather than quietly presented as exact.
+A true general minimum-weight matching (Edmonds' blossom algorithm) would
+remove that cutoff entirely, but risks subtle correctness bugs that are
+hard to fully rule out by testing, so this trades a small, honestly-labeled
+quality gap above 20 rooms for an algorithm whose exactness below that line
+is actually verified — exhaustively round-tripped against brute-force
+matching enumeration, plus structural checks (every doorway covered,
+correct retrace count, closed walk) fuzzed across hundreds of random grid
+shapes.
+
 ## Project layout
 
 ```

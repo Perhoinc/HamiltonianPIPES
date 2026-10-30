@@ -196,6 +196,9 @@
   .mode-btn[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); box-shadow: var(--shadow); }
   .mode-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 
+  .walk-type-row { margin: -24px 0 32px; display: flex; }
+  .walk-type-row .mode-btn { font-size: 13px; padding: 8px 16px; }
+
   .endpoint-marker { pointer-events: none; }
   .endpoint-marker .glyph-start { fill: none; stroke-width: 2.5; }
   .endpoint-marker .glyph-end { fill: none; stroke-width: 2.5; }
@@ -290,6 +293,9 @@
   .route-marker-start { fill: none; stroke-width: 2.5; pointer-events: none; }
   .route-marker-end { pointer-events: none; }
 
+  .odd-marker { fill: none; stroke: var(--status-error); stroke-width: 2; pointer-events: none; }
+  .retrace-tick { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; pointer-events: none; }
+
   .grid-note { font-size: 12.5px; color: var(--muted); text-align: center; min-height: 16px; }
   .chip {
     display: inline-flex;
@@ -318,6 +324,7 @@
   .stat-label .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
   .stat-label .sw.path { background: var(--accent-path); }
   .stat-label .sw.cycle { background: var(--accent-cycle); }
+  .stat-label .sw.warn { background: var(--status-error); border-radius: 50%; }
   .stat-value {
     font-family: "Roboto Slab", monospace;
     font-weight: 500;
@@ -330,6 +337,7 @@
   .stat-value.path { color: var(--accent-path); }
   .stat-value.cycle { color: var(--accent-cycle); }
   .stat-value.zero { color: var(--muted); }
+  .stat-value.warn { color: var(--status-error); }
   .stat-value .unit { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 6px; }
 
   .progress-line {
@@ -469,12 +477,17 @@
     <p class="dek">Weave a route through every open cell of a grid, <strong>exactly once</strong>, and never repeat one. Block off cells to cut arbitrary shapes, and get the <strong>exact</strong> count of every such route — computed, not estimated, even when there are hundreds of trillions of them.</p>
   </header>
 
+  <div class="mode-row walk-type-row" role="group" aria-label="Walk type">
+    <button type="button" class="mode-btn" id="walk-hamiltonian" aria-pressed="true">Hamiltonian &mdash; every room once</button>
+    <button type="button" class="mode-btn" id="walk-eulerian" aria-pressed="false">Eulerian &mdash; every doorway once</button>
+  </div>
+
   <div class="workspace">
     <section class="card" aria-labelledby="grid-heading">
       <h2 id="grid-heading">The grid</h2>
       <p class="card-sub" id="grid-card-sub">Click any cell to cut it out of the grid. Routes weave around the gaps.</p>
 
-      <div class="mode-row" role="group" aria-label="What clicking a cell does">
+      <div class="mode-row" role="group" aria-label="What clicking a cell does" id="cell-mode-row">
         <button type="button" class="mode-btn" id="mode-cells" aria-pressed="true">Cut cells</button>
         <button type="button" class="mode-btn" id="mode-endpoints" aria-pressed="false">Pick start / end</button>
       </div>
@@ -509,7 +522,7 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="results-heading">
+    <section class="card" id="hamiltonian-card" aria-labelledby="results-heading">
       <h2 id="results-heading">Exact counts</h2>
       <p class="card-sub" id="results-sub">Recomputes automatically whenever the grid changes.</p>
 
@@ -557,9 +570,33 @@
 
       <p class="method-note">Counted exactly with a "broken-profile" dynamic program that sweeps the grid once, tracking which cells still have a dangling connection — no route is ever built and thrown away, so it stays fast even when there are trillions of them. "Any order" browses by number: it can reconstruct the exact k-th solution directly, without generating the ones before it, so Prev/Next/jump-to-# and Random all work even when there are hundreds of trillions of solutions. "Fewest/most turns" uses the same idea again, extended to track the best few distinct turn-counts reachable from every point in the sweep, so the top 10 come out directly rather than by sorting the full set. Cross-checked against brute-force enumeration and against <a href="https://oeis.org/A096969" style="color:inherit" target="_blank" rel="noopener">OEIS A096969</a> / <a href="https://oeis.org/A003763" style="color:inherit" target="_blank" rel="noopener">A003763</a>.</p>
     </section>
+
+    <section class="card" id="euler-card" aria-labelledby="euler-heading" style="display:none;">
+      <h2 id="euler-heading">Eulerian walk</h2>
+      <p class="card-sub">Checks whether a single walk can cross every doorway exactly once, and traces one when it can.</p>
+
+      <div class="stat">
+        <div class="stat-label"><span class="sw path"></span>Doorways (edges)</div>
+        <div class="stat-value path tnum mono" id="euler-edges-value">&mdash;</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label"><span class="sw warn"></span>Rooms with an odd number of doors</div>
+        <div class="stat-value tnum mono" id="euler-odd-value">&mdash;</div>
+      </div>
+
+      <div class="compute-note" id="euler-status"></div>
+      <div class="route-caption" id="euler-route-caption"></div>
+
+      <div class="example-row">
+        <button type="button" class="btn accent-path" id="btn-euler-walk">Trace Eulerian walk</button>
+        <button type="button" class="btn accent-cycle" id="btn-spanning-walk">Trace spanning walk</button>
+      </div>
+
+      <p class="method-note">Euler's theorem (1736): a connected room needs 0 or 2 odd-doored rooms for one walk to cross every doorway exactly once — 0 gives a closed <em>circuit</em> starting anywhere, 2 gives an open <em>path</em> that must start and end at those two rooms. Odd-doored rooms are marked with a small ring. When neither applies, "Trace spanning walk" finds the shortest <em>closed</em> walk that still crosses every doorway at least once (the Route Inspection / "Chinese Postman" problem): it pairs up the odd-doored rooms as cheaply as possible — an exact search below 20 of them, a close and honestly-labeled heuristic above that — and re-walks each pair's shortest connection. Doorways crossed twice get a small tick mark.</p>
+    </section>
   </div>
 
-  <section class="chart-section" aria-labelledby="chart-heading">
+  <section class="chart-section" id="chart-section" aria-labelledby="chart-heading">
     <h2 id="chart-heading">How the count grows</h2>
     <p class="card-sub">Every route on a plain N&times;N grid (no cuts), N = 2 to 10. The y-axis is logarithmic &mdash; each gridline is 100&times; more routes than the one below it.</p>
     <div class="card chart-card">
@@ -1281,6 +1318,313 @@ function spawnWorker() {
   return worker;
 }
 
+/* ============================== Eulerian walk algorithms ==============================
+   Runs on the main thread, not the worker: unlike the Hamiltonian DP, degree
+   analysis, Hierholzer's algorithm and the Route Inspection matching below
+   are all sub-50ms even at 10x10, so there's no need to offload them. Grid
+   graph: vertices = open cells, edges = 4-directional adjacency between two
+   open cells. Undirected, unweighted (each grid edge has length 1). */
+
+function buildGraph(rows, cols, blockedArr) {
+  const blocked = new Set(blockedArr.map(([r, c]) => r + "," + c));
+  const key = (r, c) => r + "," + c;
+  const open = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (!blocked.has(key(r, c))) open.push([r, c]);
+  const index = new Map(open.map((p, i) => [key(p[0], p[1]), i]));
+  const n = open.length;
+  const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+  const adj = Array.from({ length: n }, () => new Set());
+  const edgeSet = new Set(); // canonical "i-j" (i<j) for each physical grid edge
+  for (let i = 0; i < n; i++) {
+    const [r, c] = open[i];
+    for (const [dr, dc] of DIRS) {
+      const j = index.get(key(r + dr, c + dc));
+      if (j !== undefined) {
+        adj[i].add(j);
+        edgeSet.add(i < j ? `${i}-${j}` : `${j}-${i}`);
+      }
+    }
+  }
+  const degree = open.map((_, i) => adj[i].size);
+  return { open, index, adj, degree, n, edgeCount: edgeSet.size };
+}
+
+/* Connected components restricted to vertices that have at least one edge
+   (isolated open cells, degree 0, are reported separately -- they can never
+   be touched by any edge-walk). Each component's own vertex-degree sum is
+   always even (it's 2x that component's edge count), so each one
+   independently has an even number of odd-degree vertices -- matching never
+   needs to look outside a single component. */
+function edgeConnectedComponents(graph) {
+  const { n, adj, degree } = graph;
+  const seen = new Array(n).fill(false);
+  const comps = [];
+  for (let s = 0; s < n; s++) {
+    if (degree[s] === 0 || seen[s]) continue;
+    const comp = [];
+    const stack = [s];
+    seen[s] = true;
+    while (stack.length) {
+      const v = stack.pop();
+      comp.push(v);
+      for (const w of adj[v]) if (!seen[w]) { seen[w] = true; stack.push(w); }
+    }
+    comps.push(comp);
+  }
+  return comps;
+}
+
+/* Euler's theorem classification for the whole grid. */
+function classify(graph) {
+  const { n, degree, edgeCount } = graph;
+  const isolated = [];
+  for (let i = 0; i < n; i++) if (degree[i] === 0) isolated.push(i);
+  if (edgeCount === 0) return { kind: "empty", isolated };
+
+  const comps = edgeConnectedComponents(graph);
+  const oddVerts = [];
+  for (let i = 0; i < n; i++) if (degree[i] % 2 === 1) oddVerts.push(i);
+
+  if (comps.length > 1) return { kind: "disconnected", isolated, components: comps.length, odd: oddVerts };
+  if (oddVerts.length === 0) return { kind: "circuit", isolated, odd: oddVerts, start: comps[0][0] };
+  if (oddVerts.length === 2) return { kind: "path", isolated, odd: oddVerts, start: oddVerts[0], end: oddVerts[1] };
+  return { kind: "impossible", isolated, odd: oddVerts };
+}
+
+/* Hierholzer's algorithm over a LOCAL vertex set (0..n-1) and an explicit
+   edge list (each entry one traversable copy of a physical or duplicated
+   edge). Every vertex touched by `edgeList` must have even degree. Returns
+   the walk as a vertex sequence plus which edge-list index was used for
+   each step, in order. */
+function hierholzer(n, edgeList, start) {
+  const adj = Array.from({ length: n }, () => []);
+  edgeList.forEach(([u, v], id) => {
+    adj[u].push({ to: v, id });
+    adj[v].push({ to: u, id });
+  });
+  const used = new Array(edgeList.length).fill(false);
+  const ptr = new Array(n).fill(0);
+  const vertexStack = [start];
+  const edgeStack = [];
+  const outVerts = [];
+  const outEdges = [];
+  while (vertexStack.length) {
+    const v = vertexStack[vertexStack.length - 1];
+    let advanced = false;
+    while (ptr[v] < adj[v].length) {
+      const { to, id } = adj[v][ptr[v]];
+      ptr[v]++;
+      if (used[id]) continue;
+      used[id] = true;
+      vertexStack.push(to);
+      edgeStack.push(id);
+      advanced = true;
+      break;
+    }
+    if (!advanced) {
+      outVerts.push(vertexStack.pop());
+      if (edgeStack.length) outEdges.push(edgeStack.pop());
+    }
+  }
+  outVerts.reverse();
+  outEdges.reverse();
+  return { verts: outVerts, edges: outEdges, usedAll: used.every(Boolean) };
+}
+
+/* ---- shortest paths + minimum-weight perfect matching (Route Inspection) ---- */
+
+function bfsDistances(graph, source) {
+  const { n, adj } = graph;
+  const dist = new Array(n).fill(-1);
+  const parent = new Array(n).fill(-1);
+  dist[source] = 0;
+  const queue = [source];
+  let qi = 0;
+  while (qi < queue.length) {
+    const v = queue[qi++];
+    for (const w of adj[v]) if (dist[w] === -1) { dist[w] = dist[v] + 1; parent[w] = v; queue.push(w); }
+  }
+  return { dist, parent };
+}
+
+function shortestPath(parent, target) {
+  const path = [];
+  let cur = target;
+  while (cur !== -1) { path.push(cur); cur = parent[cur]; }
+  return path.reverse();
+}
+
+/* Exact minimum-weight perfect matching via bitmask DP over k items
+   (k must be even). cost[i][j] is symmetric. O(2^k * k). */
+function minWeightMatchingBitmask(k, cost) {
+  const FULL = (1 << k) - 1;
+  const dp = new Array(1 << k).fill(Infinity);
+  const choice = new Array(1 << k).fill(-1);
+  dp[0] = 0;
+  for (let mask = 0; mask <= FULL; mask++) {
+    if (dp[mask] === Infinity) continue;
+    let i = -1;
+    for (let b = 0; b < k; b++) if (!(mask & (1 << b))) { i = b; break; }
+    if (i === -1) continue;
+    for (let j = i + 1; j < k; j++) {
+      if (mask & (1 << j)) continue;
+      const nmask = mask | (1 << i) | (1 << j);
+      const ncost = dp[mask] + cost[i][j];
+      if (ncost < dp[nmask]) { dp[nmask] = ncost; choice[nmask] = i * 64 + j; }
+    }
+  }
+  const pairs = [];
+  let mask = FULL;
+  while (mask !== 0) {
+    const enc = choice[mask];
+    const i = Math.floor(enc / 64), j = enc % 64;
+    pairs.push([i, j]);
+    mask ^= (1 << i) | (1 << j);
+  }
+  return { pairs, total: dp[FULL] };
+}
+
+const BITMASK_MATCH_CAP = 20; // 2^20 * 20 ~= 20M ops, comfortably fast; grows too
+// slow and too memory-hungry well before k=26 to push much further (true
+// general minimum-weight perfect matching needs Edmonds' blossom algorithm
+// for polynomial-time exactness at the scale a 10x10 grid's boundary can
+// produce -- up to ~40 odd-degree cells on an otherwise-bare grid. Rather
+// than risk shipping a subtly-wrong hand-rolled blossom implementation,
+// above the cap this uses a strong, honestly-labeled heuristic instead.
+
+/* Greedy-by-cheapest-edge matching: repeatedly take the globally cheapest
+   still-available pair (not just "nearest to an arbitrary start", which is
+   markedly weaker). This is the classical greedy matching heuristic, within
+   2x of optimal in the worst case and typically much closer for metric
+   costs like grid shortest-path distance. */
+function greedyEdgeMatching(k, cost) {
+  const pairs = [];
+  for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) pairs.push([i, j, cost[i][j]]);
+  pairs.sort((a, b) => a[2] - b[2]);
+  const used = new Array(k).fill(false);
+  const result = [];
+  let total = 0;
+  for (const [i, j, c] of pairs) {
+    if (used[i] || used[j]) continue;
+    used[i] = used[j] = true;
+    result.push([i, j]);
+    total += c;
+  }
+  return { pairs: result, total };
+}
+
+/* Local-search improvement: repeatedly look for two matched pairs whose
+   cross-pairing (swap one endpoint between them) is cheaper, and take it.
+   Runs until a full pass finds no improvement or a pass budget is spent.
+   Standard pairwise-exchange local search for the matching/TSP family --
+   doesn't guarantee the global optimum, but reliably closes most of the
+   gap a plain greedy match leaves open. */
+function localSearchImprove(pairsIn, cost, maxPasses) {
+  let pairs = pairsIn.map((p) => p.slice());
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let improved = false;
+    for (let a = 0; a < pairs.length; a++) {
+      for (let b = a + 1; b < pairs.length; b++) {
+        const [i, j] = pairs[a], [p, q] = pairs[b];
+        const current = cost[i][j] + cost[p][q];
+        const swap1 = cost[i][p] + cost[j][q];
+        const swap2 = cost[i][q] + cost[j][p];
+        if (swap1 < current && swap1 <= swap2) { pairs[a] = [i, p]; pairs[b] = [j, q]; improved = true; }
+        else if (swap2 < current) { pairs[a] = [i, q]; pairs[b] = [j, p]; improved = true; }
+      }
+    }
+    if (!improved) break;
+  }
+  let total = 0;
+  for (const [i, j] of pairs) total += cost[i][j];
+  return { pairs, total };
+}
+
+function heuristicMatching(k, cost) {
+  const greedy = greedyEdgeMatching(k, cost);
+  const improved = localSearchImprove(greedy.pairs, cost, 8);
+  return { pairs: improved.pairs, total: improved.total, approximate: true };
+}
+
+/* Route Inspection (Chinese Postman) for ONE connected component, given as
+   a list of global vertex indices. Produces the shortest CLOSED walk that
+   covers every edge of that component at least once. If the component is
+   already Eulerian (0 odd vertices), this degenerates to the plain
+   Eulerian circuit with zero retraces. */
+function routeInspectComponent(graph, compVerts) {
+  const localIndex = new Map(compVerts.map((v, i) => [v, i]));
+  const m = compVerts.length;
+  const localAdj = Array.from({ length: m }, () => []);
+  const baseEdges = [];
+  const seenEdge = new Set();
+  for (const v of compVerts) {
+    const li = localIndex.get(v);
+    for (const w of graph.adj[v]) {
+      const lj = localIndex.get(w);
+      localAdj[li].push(lj);
+      const k = li < lj ? li + "-" + lj : lj + "-" + li;
+      if (seenEdge.has(k)) continue;
+      seenEdge.add(k);
+      baseEdges.push([li, lj]);
+    }
+  }
+  const physicalEdgeCount = baseEdges.length;
+  const localGraph = { n: m, adj: localAdj };
+
+  const degree = new Array(m).fill(0);
+  for (const [u, v] of baseEdges) { degree[u]++; degree[v]++; }
+  const odds = [];
+  for (let i = 0; i < m; i++) if (degree[i] % 2 === 1) odds.push(i);
+
+  let matching = null, approximate = false;
+  if (odds.length > 0) {
+    const distFromOdd = odds.map((v) => bfsDistances(localGraph, v));
+    const k = odds.length;
+    const cost = Array.from({ length: k }, (_, i) => Array.from({ length: k }, (_, j) => (i === j ? 0 : distFromOdd[i].dist[odds[j]])));
+    if (k <= BITMASK_MATCH_CAP) {
+      matching = minWeightMatchingBitmask(k, cost);
+    } else {
+      matching = heuristicMatching(k, cost);
+      approximate = true;
+    }
+    for (const [ia, ib] of matching.pairs) {
+      const path = shortestPath(distFromOdd[ia].parent, odds[ib]);
+      for (let t = 0; t + 1 < path.length; t++) baseEdges.push([path[t], path[t + 1]]);
+    }
+  }
+
+  const result = hierholzer(m, baseEdges, 0);
+  return {
+    verts: result.verts.map((i) => compVerts[i]),
+    retraced: result.edges.map((id) => id >= physicalEdgeCount),
+    physicalEdgeCount,
+    retracedCount: baseEdges.length - physicalEdgeCount,
+    matching,
+    approximate,
+    usedAll: result.usedAll,
+  };
+}
+
+function spanningWalk(graph) {
+  const comps = edgeConnectedComponents(graph);
+  return comps.map((compVerts) => routeInspectComponent(graph, compVerts));
+}
+
+/* Plain Eulerian walk (no retracing), only valid when a classify() call
+   reports kind "circuit" or "path" for the whole grid. */
+function eulerianWalk(graph, startVertex) {
+  const baseEdges = [];
+  const seenEdge = new Set();
+  for (let i = 0; i < graph.n; i++) for (const j of graph.adj[i]) {
+    const k = i < j ? i + "-" + j : j + "-" + i;
+    if (seenEdge.has(k)) continue;
+    seenEdge.add(k);
+    baseEdges.push([i, j]);
+  }
+  const result = hierholzer(graph.n, baseEdges, startVertex);
+  return { verts: result.verts, usedAll: result.usedAll };
+}
+
 /* ============================== App state ============================== */
 const state = {
   rows: 6,
@@ -1296,6 +1640,10 @@ const state = {
   rankEntries: null, // [{turns, cells}, ...] once computed
   rankActiveIndex: null, // which rankEntries row is currently shown on the grid
   rankMode: null, // "path" | "cycle" -- which mode rankEntries is for
+  walkType: "hamiltonian", // "hamiltonian" | "eulerian"
+  eulerGraph: null, // buildGraph() result for the current grid, kept alongside eulerInfo
+  eulerInfo: null, // classify() result for the current grid
+  eulerRoute: null, // { cells: [[r,c],...], closed, retraced: [bool,...] | null } once traced
 };
 
 const MIN_N = 2, MAX_N = 10;
@@ -1340,6 +1688,18 @@ const els = {
   resultsSub: document.getElementById("results-sub"),
   pathsLabel: document.getElementById("paths-label"),
   rankList: document.getElementById("rank-list"),
+  walkHamiltonianBtn: document.getElementById("walk-hamiltonian"),
+  walkEulerianBtn: document.getElementById("walk-eulerian"),
+  cellModeRow: document.getElementById("cell-mode-row"),
+  hamiltonianCard: document.getElementById("hamiltonian-card"),
+  eulerCard: document.getElementById("euler-card"),
+  chartSection: document.getElementById("chart-section"),
+  eulerEdgesValue: document.getElementById("euler-edges-value"),
+  eulerOddValue: document.getElementById("euler-odd-value"),
+  eulerStatus: document.getElementById("euler-status"),
+  eulerRouteCaption: document.getElementById("euler-route-caption"),
+  eulerWalkBtn: document.getElementById("btn-euler-walk"),
+  spanningWalkBtn: document.getElementById("btn-spanning-walk"),
 };
 
 function fmtCell([r, c]) { return `(${r + 1}, ${c + 1})`; }
@@ -1450,8 +1810,13 @@ function renderGrid() {
     }
   }
 
-  drawEndpointMarkers(svg, ns);
-  if (state.route) drawRoute(svg, ns);
+  if (state.walkType === "eulerian") {
+    drawOddMarkers(svg, ns);
+    if (state.eulerRoute) drawEulerRoute(svg, ns);
+  } else {
+    drawEndpointMarkers(svg, ns);
+    if (state.route) drawRoute(svg, ns);
+  }
 }
 
 function drawEndpointMarkers(svg, ns) {
@@ -1561,6 +1926,212 @@ function drawRoute(svg, ns) {
   }
 }
 
+/* ---------------- Eulerian mode: odd-degree markers + walk tracing ---------------- */
+
+function drawOddMarkers(svg, ns) {
+  const graph = state.eulerGraph;
+  if (!graph) return;
+  const group = document.createElementNS(ns, "g");
+  group.setAttribute("aria-hidden", "true");
+  svg.appendChild(group);
+  const radius = Math.max(5, CELL * 0.16);
+  for (let i = 0; i < graph.n; i++) {
+    if (graph.degree[i] % 2 !== 1) continue;
+    const [r, c] = graph.open[i];
+    const circ = document.createElementNS(ns, "circle");
+    circ.setAttribute("cx", c * CELL + CELL / 2);
+    circ.setAttribute("cy", r * CELL + CELL / 2);
+    circ.setAttribute("r", radius);
+    circ.setAttribute("class", "odd-marker");
+    group.appendChild(circ);
+  }
+}
+
+function drawEulerRoute(svg, ns) {
+  const { cells, closed, retraced } = state.eulerRoute;
+  const color = closed ? "var(--accent-cycle)" : "var(--accent-path)";
+  const pts = cells.map(([r, c]) => [c * CELL + CELL / 2, r * CELL + CELL / 2]);
+
+  const group = document.createElementNS(ns, "g");
+  group.setAttribute("aria-hidden", "true");
+  group.style.pointerEvents = "none";
+  svg.appendChild(group);
+
+  // Walks through every point in order, revisits included -- unlike a
+  // Hamiltonian cycle's route, a closed Eulerian/spanning walk's cell list
+  // already ends back at its own first point, so no extra closing segment
+  // is added here.
+  let d = `M ${pts[0][0]} ${pts[0][1]} `;
+  for (let i = 1; i < pts.length; i++) d += `L ${pts[i][0]} ${pts[i][1]} `;
+
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", d);
+  path.setAttribute("class", "route-line");
+  path.setAttribute("stroke", color);
+  path.setAttribute("stroke-width", Math.max(2.5, CELL * 0.09));
+  group.appendChild(path);
+
+  const len = path.getTotalLength();
+  path.style.strokeDasharray = String(len);
+  path.style.strokeDashoffset = String(len);
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) {
+    path.style.strokeDashoffset = "0";
+  } else {
+    const duration = Math.min(4000, 500 + cells.length * 16);
+    path.style.transition = `stroke-dashoffset ${duration}ms cubic-bezier(.4,.1,.2,1)`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { path.style.strokeDashoffset = "0"; }));
+  }
+
+  const startRadius = Math.max(4.5, CELL * 0.14);
+  const startCircle = document.createElementNS(ns, "circle");
+  startCircle.setAttribute("cx", pts[0][0]);
+  startCircle.setAttribute("cy", pts[0][1]);
+  startCircle.setAttribute("r", startRadius);
+  startCircle.setAttribute("class", "route-marker-start");
+  startCircle.setAttribute("stroke", color);
+  group.appendChild(startCircle);
+
+  if (!closed) {
+    const endSize = Math.max(6, CELL * 0.18);
+    const [ex, ey] = pts[pts.length - 1];
+    const endRect = document.createElementNS(ns, "rect");
+    endRect.setAttribute("x", ex - endSize / 2);
+    endRect.setAttribute("y", ey - endSize / 2);
+    endRect.setAttribute("width", endSize);
+    endRect.setAttribute("height", endSize);
+    endRect.setAttribute("fill", "none");
+    endRect.setAttribute("stroke", color);
+    endRect.setAttribute("stroke-width", 2.5);
+    group.appendChild(endRect);
+  }
+
+  if (retraced && retraced.length) {
+    const tickGroup = document.createElementNS(ns, "g");
+    tickGroup.setAttribute("aria-hidden", "true");
+    svg.appendChild(tickGroup);
+    const tickLen = Math.max(10, CELL * 0.4);
+    const tickGap = Math.max(3, CELL * 0.08);
+    for (let i = 0; i < retraced.length; i++) {
+      if (!retraced[i]) continue;
+      const [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+      const segLen = Math.hypot(x2 - x1, y2 - y1) || 1;
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      const ux = (x2 - x1) / segLen, uy = (y2 - y1) / segLen; // unit along the segment
+      const px = -uy, py = ux; // unit perpendicular
+      // a short double-hash (like a tally mark) across the line, to read as
+      // "crossed twice" rather than a single ambiguous dash
+      for (const off of [-tickGap / 2, tickGap / 2]) {
+        const cx = mx + ux * off, cy = my + uy * off;
+        const tick = document.createElementNS(ns, "line");
+        tick.setAttribute("x1", cx - (px * tickLen) / 2);
+        tick.setAttribute("y1", cy - (py * tickLen) / 2);
+        tick.setAttribute("x2", cx + (px * tickLen) / 2);
+        tick.setAttribute("y2", cy + (py * tickLen) / 2);
+        tick.setAttribute("class", "retrace-tick");
+        tickGroup.appendChild(tick);
+      }
+    }
+  }
+}
+
+function computeEulerInfo() {
+  const blockedArr = Array.from(state.blocked, (k) => k.split(",").map(Number));
+  state.eulerGraph = buildGraph(state.rows, state.cols, blockedArr);
+  state.eulerInfo = classify(state.eulerGraph);
+  renderEulerCard();
+}
+
+function renderEulerCard() {
+  const graph = state.eulerGraph, info = state.eulerInfo;
+  if (!graph || !info) return;
+  els.eulerEdgesValue.textContent = fmtBig(String(graph.edgeCount));
+  const oddCount = info.odd ? info.odd.length : 0;
+  els.eulerOddValue.textContent = String(oddCount);
+  els.eulerOddValue.classList.toggle("warn", oddCount > 0);
+
+  let statusText, walkEnabled = false;
+  if (info.kind === "empty") {
+    statusText = graph.n === 0 ? "No open cells yet." : "No doorways yet — every open room is isolated.";
+  } else if (info.kind === "disconnected") {
+    statusText = `This shape splits into ${info.components} separate regions joined by no doorway — no single walk can cross every doorway. "Trace spanning walk" covers the largest region.`;
+  } else if (info.kind === "circuit") {
+    statusText = "Eulerian circuit possible — every room has an even number of doors, so a walk can cross every doorway once and return to its start.";
+    walkEnabled = true;
+  } else if (info.kind === "path") {
+    statusText = "Eulerian path possible — exactly two rooms have an odd number of doors (ringed below); a walk must start at one and end at the other.";
+    walkEnabled = true;
+  } else {
+    statusText = `No Eulerian walk — ${fmtBig(String(oddCount))} rooms have an odd number of doors (need exactly 0 or 2). "Trace spanning walk" finds the shortest walk that still crosses every doorway.`;
+  }
+  els.eulerStatus.textContent = statusText;
+  els.eulerWalkBtn.disabled = !walkEnabled;
+  els.spanningWalkBtn.disabled = graph.edgeCount === 0;
+}
+
+function traceEulerianWalk() {
+  const graph = state.eulerGraph, info = state.eulerInfo;
+  if (!graph || !info || (info.kind !== "circuit" && info.kind !== "path")) return;
+  const { verts } = eulerianWalk(graph, info.start);
+  const cells = verts.map((i) => graph.open[i]);
+  state.eulerRoute = { cells, closed: info.kind === "circuit", retraced: null };
+  els.eulerRouteCaption.textContent = info.kind === "circuit"
+    ? `Eulerian circuit: crosses all ${fmtBig(String(graph.edgeCount))} doorways exactly once and returns to its start.`
+    : `Eulerian path: crosses all ${fmtBig(String(graph.edgeCount))} doorways exactly once, start to end.`;
+  renderGrid();
+}
+
+function traceSpanningWalk() {
+  const graph = state.eulerGraph;
+  if (!graph || graph.edgeCount === 0) return;
+  const components = spanningWalk(graph);
+  if (components.length === 0) return;
+  let best = components[0];
+  for (const comp of components) if (comp.verts.length > best.verts.length) best = comp;
+  const cells = best.verts.map((i) => graph.open[i]);
+  state.eulerRoute = { cells, closed: true, retraced: best.retraced };
+
+  let caption = `Spanning walk: crosses all ${fmtBig(String(best.physicalEdgeCount))} doorways in this region`;
+  caption += best.retracedCount > 0
+    ? `, re-crossing ${fmtBig(String(best.retracedCount))} of them (ticked below) to get back to its start.`
+    : " with no re-crossings needed.";
+  if (best.approximate) caption += " The doorway pairing is a close, fast heuristic here, not a proven exact minimum — too many odd-doored rooms for an exhaustive search.";
+  if (components.length > 1) {
+    let otherEdges = 0;
+    for (const comp of components) if (comp !== best) otherEdges += comp.physicalEdgeCount;
+    caption += ` This shape splits into ${components.length} separate regions; ${fmtBig(String(otherEdges))} doorways elsewhere aren't reachable from this walk.`;
+  }
+  els.eulerRouteCaption.textContent = caption;
+  renderGrid();
+}
+
+function setWalkType(type) {
+  if (state.walkType === type) return;
+  state.walkType = type;
+  els.walkHamiltonianBtn.setAttribute("aria-pressed", String(type === "hamiltonian"));
+  els.walkEulerianBtn.setAttribute("aria-pressed", String(type === "eulerian"));
+  els.hamiltonianCard.style.display = type === "hamiltonian" ? "" : "none";
+  els.eulerCard.style.display = type === "eulerian" ? "" : "none";
+  els.chartSection.style.display = type === "hamiltonian" ? "" : "none";
+  els.cellModeRow.style.display = type === "hamiltonian" ? "" : "none";
+  if (type === "eulerian" && state.editMode !== "cells") {
+    state.editMode = "cells";
+    els.modeCellsBtn.setAttribute("aria-pressed", "true");
+    els.modeEndpointsBtn.setAttribute("aria-pressed", "false");
+    els.cellsBtnRow.style.display = "";
+    els.endpointsBtnRow.style.display = "none";
+    els.gridCardSub.textContent = "Click any cell to cut it out of the grid. Routes weave around the gaps.";
+  }
+  resetRoute();
+  renderGrid();
+  updateNote();
+  if (type === "hamiltonian") scheduleCompute();
+}
+els.walkHamiltonianBtn.addEventListener("click", () => setWalkType("hamiltonian"));
+els.walkEulerianBtn.addEventListener("click", () => setWalkType("eulerian"));
+els.eulerWalkBtn.addEventListener("click", traceEulerianWalk);
+els.spanningWalkBtn.addEventListener("click", traceSpanningWalk);
+
 function resetRoute() {
   state.route = null;
   state.browseMode = null;
@@ -1568,11 +2139,14 @@ function resetRoute() {
   state.rankEntries = null;
   state.rankActiveIndex = null;
   state.rankMode = null;
+  state.eulerRoute = null;
   els.routeCaption.textContent = "";
   els.navRow.style.display = "none";
   els.rankList.style.display = "none";
   els.rankList.innerHTML = "";
   els.browseStatus.style.display = "none";
+  els.eulerRouteCaption.textContent = "";
+  if (state.walkType === "eulerian") computeEulerInfo();
 }
 
 function onCellToggle(e) {
@@ -1607,7 +2181,7 @@ function updateNote() {
   const total = state.rows * state.cols;
   const openCount = total - state.blocked.size;
   let html = `<span class="chip"><span class="sw"></span>${openCount} open cell${openCount === 1 ? "" : "s"}</span>`;
-  if (openCount > 0 && openCount % 2 === 1) {
+  if (state.walkType === "hamiltonian" && openCount > 0 && openCount % 2 === 1) {
     html += ` <span class="chip warn">odd count &mdash; no cycle is possible</span>`;
   }
   els.gridNote.innerHTML = html;
@@ -1696,6 +2270,7 @@ let computeStartTime = 0;
 let elapsedTimer = null;
 
 function scheduleCompute(delay) {
+  if (state.walkType !== "hamiltonian") return; // Eulerian analysis runs synchronously elsewhere
   if (computeDebounceTimer) clearTimeout(computeDebounceTimer);
   computeDebounceTimer = setTimeout(runCompute, delay === undefined ? 350 : delay);
 }
