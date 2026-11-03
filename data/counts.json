@@ -1,0 +1,74 @@
+[
+  {
+    "n": 2,
+    "grid": "2x2",
+    "num_paths": 4,
+    "num_cycles": 1,
+    "path_seconds": 0.0001,
+    "cycle_seconds": 0.0
+  },
+  {
+    "n": 3,
+    "grid": "3x3",
+    "num_paths": 20,
+    "num_cycles": 0,
+    "path_seconds": 0.0002,
+    "cycle_seconds": 0.0
+  },
+  {
+    "n": 4,
+    "grid": "4x4",
+    "num_paths": 276,
+    "num_cycles": 6,
+    "path_seconds": 0.0012,
+    "cycle_seconds": 0.0002
+  },
+  {
+    "n": 5,
+    "grid": "5x5",
+    "num_paths": 4324,
+    "num_cycles": 0,
+    "path_seconds": 0.0055,
+    "cycle_seconds": 0.0
+  },
+  {
+    "n": 6,
+    "grid": "6x6",
+    "num_paths": 229348,
+    "num_cycles": 1072,
+    "path_seconds": 0.0305,
+    "cycle_seconds": 0.0024
+  },
+  {
+    "n": 7,
+    "grid": "7x7",
+    "num_paths": 13535280,
+    "num_cycles": 0,
+    "path_seconds": 0.1181,
+    "cycle_seconds": 0.0
+  },
+  {
+    "n": 8,
+    "grid": "8x8",
+    "num_paths": 3023313284,
+    "num_cycles": 4638576,
+    "path_seconds": 0.5174,
+    "cycle_seconds": 0.0267
+  },
+  {
+    "n": 9,
+    "grid": "9x9",
+    "num_paths": 745416341496,
+    "num_cycles": 0,
+    "path_seconds": 1.9909,
+    "cycle_seconds": 0.0
+  },
+  {
+    "n": 10,
+    "grid": "10x10",
+    "num_paths": 730044829512632,
+    "num_cycles": 467260456608,
+    "path_seconds": 9.1898,
+    "cycle_seconds": 0.2966
+  }
+]

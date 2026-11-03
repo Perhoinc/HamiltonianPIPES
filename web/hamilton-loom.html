@@ -1,0 +1,2714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hamilton Loom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --paper: #eef1f3;
+    --surface: #f8f9fa;
+    --surface-2: #ffffff;
+    --ink: #1b262c;
+    --ink-soft: #33424a;
+    --muted: #5b6b73;
+    --line: #c7d2d6;
+    --line-soft: #dde4e7;
+    --accent-path: #c1571e;
+    --accent-path-soft: #f2ded0;
+    --accent-cycle: #0e8f6f;
+    --accent-cycle-soft: #d7ece5;
+    --blocked: #29343a;
+    --blocked-hatch: #3d4a52;
+    --status-error: #b3261e;
+    --status-error-soft: #f6dedb;
+    --focus-ring: #1f6f9c;
+    --shadow: 0 1px 2px rgba(27, 38, 44, 0.06), 0 8px 24px -12px rgba(27, 38, 44, 0.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #10161a;
+      --surface: #171f24;
+      --surface-2: #1b2328;
+      --ink: #e7edf0;
+      --ink-soft: #c7d1d5;
+      --muted: #8ea0a8;
+      --line: #2a363c;
+      --line-soft: #202a2f;
+      --accent-path: #d16b28;
+      --accent-path-soft: #3a2a1c;
+      --accent-cycle: #2fa07f;
+      --accent-cycle-soft: #16332c;
+      --blocked: #05070a;
+      --blocked-hatch: #0f1418;
+      --status-error: #e5645c;
+      --status-error-soft: #3a1f1d;
+      --focus-ring: #5fb4e0;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 28px -12px rgba(0, 0, 0, 0.6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #10161a;
+    --surface: #171f24;
+    --surface-2: #1b2328;
+    --ink: #e7edf0;
+    --ink-soft: #c7d1d5;
+    --muted: #8ea0a8;
+    --line: #2a363c;
+    --line-soft: #202a2f;
+    --accent-path: #d16b28;
+    --accent-path-soft: #3a2a1c;
+    --accent-cycle: #2fa07f;
+    --accent-cycle-soft: #16332c;
+    --blocked: #05070a;
+    --blocked-hatch: #0f1418;
+    --status-error: #e5645c;
+    --status-error-soft: #3a1f1d;
+    --focus-ring: #5fb4e0;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 28px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Roboto Slab", ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 24px 80px;
+  }
+
+  h1, h2, h3 { font-family: "Roboto Slab", Georgia, "Times New Roman", serif; text-wrap: balance; margin: 0; }
+
+  .mono { font-family: "Roboto Slab", ui-monospace, "SFMono-Regular", Menlo, monospace; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  .eyebrow {
+    font-family: "Roboto Slab", ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-path);
+  }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-left: 20px;
+    border-left: 3px solid var(--accent-path);
+    margin-bottom: 44px;
+  }
+  header h1 { font-size: clamp(32px, 5vw, 46px); font-weight: 600; }
+  header .dek { max-width: 62ch; color: var(--ink-soft); font-size: 16px; }
+  header .dek strong { color: var(--ink); font-weight: 600; }
+
+  .theme-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 20;
+    display: flex;
+    gap: 2px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 3px;
+    box-shadow: var(--shadow);
+  }
+  .theme-toggle button {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: 500 12px "Roboto Slab", sans-serif;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .theme-toggle button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+  .theme-toggle button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+  /* ---------- layout ---------- */
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .workspace { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 22px 24px 26px;
+  }
+
+  .card h2 {
+    font-size: 13px;
+    font-family: "Roboto Slab", monospace;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .card .card-sub { color: var(--muted); font-size: 13.5px; margin-bottom: 18px; }
+
+  /* ---------- grid controls ---------- */
+  .mode-row {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 16px;
+  }
+  .mode-btn {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: 500 12.5px "Roboto Slab", sans-serif;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .mode-btn[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); box-shadow: var(--shadow); }
+  .mode-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+  .walk-type-row { margin: -24px 0 32px; display: flex; }
+  .walk-type-row .mode-btn { font-size: 13px; padding: 8px 16px; }
+
+  .endpoint-marker { pointer-events: none; }
+  .endpoint-marker .glyph-start { fill: none; stroke-width: 2.5; }
+  .endpoint-marker .glyph-end { fill: none; stroke-width: 2.5; }
+  .endpoint-marker text {
+    font-family: "Roboto Slab", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+  .cell.pickable:hover { fill: var(--accent-cycle-soft); }
+
+  .dims-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stepper label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 4px;
+  }
+  .stepper button {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .stepper button:hover { border-color: var(--accent-path); color: var(--accent-path); }
+  .stepper button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .stepper button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .stepper .val {
+    min-width: 22px;
+    text-align: center;
+    font-family: "Roboto Slab", monospace;
+    font-weight: 500;
+    font-size: 15px;
+  }
+
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .btn {
+    font: 500 12.5px "Roboto Slab", sans-serif;
+    padding: 7px 13px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  }
+  .btn:hover { border-color: var(--muted); color: var(--ink); }
+  .btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .btn.accent-path { border-color: var(--accent-path); color: var(--accent-path); }
+  .btn.accent-path:hover { background: var(--accent-path-soft); }
+  .btn.accent-cycle { border-color: var(--accent-cycle); color: var(--accent-cycle); }
+  .btn.accent-cycle:hover { background: var(--accent-cycle-soft); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .grid-shell { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .grid-svg-wrap { width: 100%; display: flex; justify-content: center; }
+  svg.gridsvg { max-width: 100%; height: auto; user-select: none; }
+  .cell {
+    fill: var(--surface-2);
+    stroke: var(--line);
+    stroke-width: 1;
+    cursor: pointer;
+    transition: fill 100ms ease;
+  }
+  .cell:hover { fill: var(--accent-path-soft); }
+  .cell:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  .cell.blocked { fill: var(--blocked); cursor: pointer; }
+  .cell.blocked:hover { fill: var(--blocked-hatch); }
+  .cell-hatch { stroke: var(--blocked-hatch); stroke-width: 1; pointer-events: none; }
+
+  .route-line { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  .route-dot { }
+  .route-marker-start { fill: none; stroke-width: 2.5; pointer-events: none; }
+  .route-marker-end { pointer-events: none; }
+
+  .odd-marker { fill: none; stroke: var(--status-error); stroke-width: 2; pointer-events: none; }
+  .retrace-tick { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; pointer-events: none; }
+
+  .grid-note { font-size: 12.5px; color: var(--muted); text-align: center; min-height: 16px; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px 3px 8px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--line-soft);
+    color: var(--ink-soft);
+  }
+  .chip.warn { background: var(--status-error-soft); color: var(--status-error); }
+  .chip .sw { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+
+  /* ---------- results ---------- */
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 0 16px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .stat:first-of-type { border-top: none; padding-top: 4px; }
+  .stat-label { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-soft); font-weight: 500; }
+  .stat-label .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .stat-label .sw.path { background: var(--accent-path); }
+  .stat-label .sw.cycle { background: var(--accent-cycle); }
+  .stat-label .sw.warn { background: var(--status-error); border-radius: 50%; }
+  .stat-value {
+    font-family: "Roboto Slab", monospace;
+    font-weight: 500;
+    font-size: clamp(20px, 3.1vw, 28px);
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  .stat-value.path { color: var(--accent-path); }
+  .stat-value.cycle { color: var(--accent-cycle); }
+  .stat-value.zero { color: var(--muted); }
+  .stat-value.warn { color: var(--status-error); }
+  .stat-value .unit { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+
+  .progress-line {
+    height: 3px;
+    border-radius: 3px;
+    background: var(--line-soft);
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-line .bar {
+    height: 100%;
+    width: 40%;
+    background: var(--accent-path);
+    border-radius: 3px;
+    animation: slide 1.1s ease-in-out infinite;
+  }
+  @keyframes slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+  .compute-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  .example-row { display: flex; gap: 8px; margin: 20px 0 6px; flex-wrap: wrap; }
+  .route-caption { font-size: 12px; color: var(--muted); min-height: 16px; }
+
+  .browse-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+  .browse-label {
+    font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 10px;
+  }
+  .nav-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .nav-btn { width: 30px; padding: 7px 0; text-align: center; font-size: 15px; line-height: 1; }
+  .nav-readout {
+    font-size: 12.5px; color: var(--ink-soft); min-width: 128px; text-align: center;
+    padding: 0 4px;
+  }
+  .nav-jump { display: flex; gap: 4px; margin: 0 0 0 6px; }
+  .nav-input {
+    width: 92px; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--surface-2); color: var(--ink); font-size: 12.5px;
+  }
+  .nav-input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+  .rank-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .rank-row {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 7px 10px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--surface-2); color: var(--ink); cursor: pointer;
+    font: 500 12.5px "Roboto Slab", sans-serif; text-align: left;
+  }
+  .rank-row:hover { border-color: var(--muted); }
+  .rank-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .rank-row.active { border-color: var(--accent-path); background: var(--accent-path-soft); }
+  .rank-row .rank-num { font-family: "Roboto Slab", monospace; color: var(--muted); width: 20px; flex: none; }
+  .rank-row .rank-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+  .rank-row .rank-solnum { font-family: "Roboto Slab", monospace; font-variant-numeric: tabular-nums; }
+  .rank-row .rank-turns { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .rank-row .rank-chevron { margin-left: auto; color: var(--ink-soft); flex: none; }
+
+  .method-note {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line-soft);
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+
+  /* ---------- chart section ---------- */
+  .chart-section { margin-top: 44px; }
+  .chart-section h2 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .chart-section .card-sub { color: var(--muted); font-size: 14px; margin-bottom: 22px; max-width: 68ch; }
+  .chart-card { padding: 24px 26px 18px; }
+  .chart-scroll { overflow-x: auto; }
+  .legend { display: flex; gap: 18px; margin-bottom: 4px; font-size: 12.5px; color: var(--ink-soft); }
+  .legend .item { display: flex; align-items: center; gap: 7px; }
+  .legend .sw { width: 18px; height: 2px; border-radius: 2px; }
+  .legend .sw.path { background: var(--accent-path); }
+  .legend .sw.cycle { background: var(--accent-cycle); }
+
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: "Roboto Slab", monospace;
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 10px));
+    white-space: nowrap;
+    transition: opacity 100ms ease;
+    z-index: 30;
+  }
+  #tooltip.show { opacity: 1; }
+
+  .axis-line { stroke: var(--line); stroke-width: 1; }
+  .grid-line-h { stroke: var(--line-soft); stroke-width: 1; stroke-dasharray: 2 3; }
+  .axis-label { fill: var(--muted); font-family: "Roboto Slab", monospace; font-size: 11px; }
+  .chart-line { fill: none; stroke-width: 2; }
+  .chart-dot { stroke: var(--surface); stroke-width: 2; }
+  .current-n-line { stroke: var(--accent-path); stroke-width: 1.2; stroke-dasharray: 3 3; opacity: 0.7; }
+  .current-n-label { fill: var(--accent-path); font-family: "Roboto Slab", monospace; font-size: 10.5px; font-weight: 500; }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12.5px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  footer .mono { color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress-line .bar { animation: none; }
+    * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+  }
+</style>
+
+</head>
+<body>
+<div class="theme-toggle" role="group" aria-label="Theme">
+  <button id="theme-system" type="button" aria-pressed="true">Auto</button>
+  <button id="theme-light" type="button" aria-pressed="false">Light</button>
+  <button id="theme-dark" type="button" aria-pressed="false">Dark</button>
+</div>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Grid combinatorics · exact enumeration</div>
+    <h1>Hamilton Loom</h1>
+    <p class="dek">Weave a route through every open cell of a grid, <strong>exactly once</strong>, and never repeat one. Block off cells to cut arbitrary shapes, and get the <strong>exact</strong> count of every such route — computed, not estimated, even when there are hundreds of trillions of them.</p>
+  </header>
+
+  <div class="mode-row walk-type-row" role="group" aria-label="Walk type">
+    <button type="button" class="mode-btn" id="walk-hamiltonian" aria-pressed="true">Hamiltonian &mdash; every room once</button>
+    <button type="button" class="mode-btn" id="walk-eulerian" aria-pressed="false">Eulerian &mdash; every doorway once</button>
+  </div>
+
+  <div class="workspace">
+    <section class="card" aria-labelledby="grid-heading">
+      <h2 id="grid-heading">The grid</h2>
+      <p class="card-sub" id="grid-card-sub">Click any cell to cut it out of the grid. Routes weave around the gaps.</p>
+
+      <div class="mode-row" role="group" aria-label="What clicking a cell does" id="cell-mode-row">
+        <button type="button" class="mode-btn" id="mode-cells" aria-pressed="true">Cut cells</button>
+        <button type="button" class="mode-btn" id="mode-endpoints" aria-pressed="false">Pick start / end</button>
+      </div>
+
+      <div class="dims-row">
+        <div class="stepper">
+          <label for="rows-val">Rows</label>
+          <button type="button" id="rows-dec" aria-label="Fewer rows">&minus;</button>
+          <span class="val mono tnum" id="rows-val">6</span>
+          <button type="button" id="rows-inc" aria-label="More rows">+</button>
+        </div>
+        <div class="stepper">
+          <label for="cols-val">Cols</label>
+          <button type="button" id="cols-dec" aria-label="Fewer columns">&minus;</button>
+          <span class="val mono tnum" id="cols-val">6</span>
+          <button type="button" id="cols-inc" aria-label="More columns">+</button>
+        </div>
+      </div>
+
+      <div class="btn-row" id="cells-btn-row">
+        <button type="button" class="btn" id="btn-clear">Clear cuts</button>
+        <button type="button" class="btn" id="btn-randomize">Cut some holes</button>
+      </div>
+      <div class="btn-row" id="endpoints-btn-row" style="display:none;">
+        <button type="button" class="btn" id="btn-clear-endpoints">Clear start / end</button>
+      </div>
+
+      <div class="grid-shell">
+        <div class="grid-svg-wrap"><svg class="gridsvg" id="grid-svg" role="group" aria-label="Editable grid"></svg></div>
+        <div class="grid-note" id="grid-note"></div>
+        <div class="grid-note" id="endpoints-note" style="display:none;"></div>
+      </div>
+    </section>
+
+    <section class="card" id="hamiltonian-card" aria-labelledby="results-heading">
+      <h2 id="results-heading">Exact counts</h2>
+      <p class="card-sub" id="results-sub">Recomputes automatically whenever the grid changes.</p>
+
+      <div class="stat">
+        <div class="stat-label"><span class="sw path"></span><span id="paths-label">Hamiltonian paths</span></div>
+        <div class="stat-value path tnum mono" id="paths-value">&mdash;</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label"><span class="sw cycle"></span>Hamiltonian cycles</div>
+        <div class="stat-value cycle tnum mono" id="cycles-value">&mdash;</div>
+      </div>
+
+      <div id="progress-wrap" style="display:none;">
+        <div class="progress-line"><div class="bar"></div></div>
+        <div class="compute-note" id="progress-note">counting&hellip;</div>
+      </div>
+      <div class="compute-note" id="timing-note" style="display:none;"></div>
+
+      <div class="route-caption" id="route-caption"></div>
+
+      <div class="browse-block">
+        <div class="browse-label">Browse solutions</div>
+        <div class="mode-row" role="group" aria-label="Order solutions by">
+          <button type="button" class="mode-btn" id="order-any" aria-pressed="true">Any order</button>
+          <button type="button" class="mode-btn" id="order-min-turns" aria-pressed="false">Fewest turns</button>
+          <button type="button" class="mode-btn" id="order-max-turns" aria-pressed="false">Most turns</button>
+        </div>
+        <div class="example-row">
+          <button type="button" class="btn accent-path" id="btn-browse-path">Browse paths</button>
+          <button type="button" class="btn accent-cycle" id="btn-browse-cycle">Browse cycles</button>
+        </div>
+        <div class="nav-row" id="nav-row" style="display:none;">
+          <button type="button" class="btn nav-btn" id="nav-prev" aria-label="Previous solution">&lsaquo;</button>
+          <span class="nav-readout mono tnum" id="nav-readout">&mdash;</span>
+          <button type="button" class="btn nav-btn" id="nav-next" aria-label="Next solution">&rsaquo;</button>
+          <form id="nav-jump-form" class="nav-jump">
+            <input type="text" inputmode="numeric" autocomplete="off" class="nav-input mono tnum" id="nav-jump-input" aria-label="Jump to solution number">
+            <button type="submit" class="btn">Go</button>
+          </form>
+          <button type="button" class="btn" id="nav-random-btn">Random</button>
+        </div>
+        <ol class="rank-list" id="rank-list" style="display:none;"></ol>
+        <div class="compute-note" id="browse-status" style="display:none;"></div>
+      </div>
+
+      <p class="method-note">Counted exactly with a "broken-profile" dynamic program that sweeps the grid once, tracking which cells still have a dangling connection — no route is ever built and thrown away, so it stays fast even when there are trillions of them. "Any order" browses by number: it can reconstruct the exact k-th solution directly, without generating the ones before it, so Prev/Next/jump-to-# and Random all work even when there are hundreds of trillions of solutions. "Fewest/most turns" uses the same idea again, extended to track the best few distinct turn-counts reachable from every point in the sweep, so the top 10 come out directly rather than by sorting the full set. Cross-checked against brute-force enumeration and against <a href="https://oeis.org/A096969" style="color:inherit" target="_blank" rel="noopener">OEIS A096969</a> / <a href="https://oeis.org/A003763" style="color:inherit" target="_blank" rel="noopener">A003763</a>.</p>
+    </section>
+
+    <section class="card" id="euler-card" aria-labelledby="euler-heading" style="display:none;">
+      <h2 id="euler-heading">Eulerian walk</h2>
+      <p class="card-sub">Checks whether a single walk can cross every doorway exactly once, and traces one when it can.</p>
+
+      <div class="stat">
+        <div class="stat-label"><span class="sw path"></span>Doorways (edges)</div>
+        <div class="stat-value path tnum mono" id="euler-edges-value">&mdash;</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label"><span class="sw warn"></span>Rooms with an odd number of doors</div>
+        <div class="stat-value tnum mono" id="euler-odd-value">&mdash;</div>
+      </div>
+
+      <div class="compute-note" id="euler-status"></div>
+      <div class="route-caption" id="euler-route-caption"></div>
+
+      <div class="example-row">
+        <button type="button" class="btn accent-path" id="btn-euler-walk">Trace Eulerian walk</button>
+        <button type="button" class="btn accent-cycle" id="btn-spanning-walk">Trace spanning walk</button>
+      </div>
+
+      <p class="method-note">Euler's theorem (1736): a connected room needs 0 or 2 odd-doored rooms for one walk to cross every doorway exactly once — 0 gives a closed <em>circuit</em> starting anywhere, 2 gives an open <em>path</em> that must start and end at those two rooms. Odd-doored rooms are marked with a small ring. When neither applies, "Trace spanning walk" finds the shortest <em>closed</em> walk that still crosses every doorway at least once (the Route Inspection / "Chinese Postman" problem): it pairs up the odd-doored rooms as cheaply as possible — an exact search below 20 of them, a close and honestly-labeled heuristic above that — and re-walks each pair's shortest connection. Doorways crossed twice get a small tick mark.</p>
+    </section>
+  </div>
+
+  <section class="chart-section" id="chart-section" aria-labelledby="chart-heading">
+    <h2 id="chart-heading">How the count grows</h2>
+    <p class="card-sub">Every route on a plain N&times;N grid (no cuts), N = 2 to 10. The y-axis is logarithmic &mdash; each gridline is 100&times; more routes than the one below it.</p>
+    <div class="card chart-card">
+      <div class="legend">
+        <span class="item"><span class="sw path"></span>Hamiltonian paths</span>
+        <span class="item"><span class="sw cycle"></span>Hamiltonian cycles</span>
+      </div>
+      <div class="chart-scroll">
+        <svg id="chart-svg" width="820" height="360" role="img" aria-label="Line chart of Hamiltonian path and cycle counts for N by N grids, N from 2 to 10, on a logarithmic scale"></svg>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>A curiosity project &mdash; standalone, not affiliated with any larger tool.</span>
+    <span class="mono">plug/profile DP &middot; exact, not estimated</span>
+  </footer>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+"use strict";
+
+/* ============================== Theme ============================== */
+(function () {
+  const root = document.documentElement;
+  const buttons = {
+    system: document.getElementById("theme-system"),
+    light: document.getElementById("theme-light"),
+    dark: document.getElementById("theme-dark"),
+  };
+  function apply(mode) {
+    if (mode === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", mode);
+    Object.entries(buttons).forEach(([k, btn]) => btn.setAttribute("aria-pressed", String(k === mode)));
+    try { localStorage.setItem("hamilton-loom-theme", mode); } catch (e) {}
+  }
+  let saved = "system";
+  try { saved = localStorage.getItem("hamilton-loom-theme") || "system"; } catch (e) {}
+  apply(saved);
+  buttons.system.addEventListener("click", () => apply("system"));
+  buttons.light.addEventListener("click", () => apply("light"));
+  buttons.dark.addEventListener("click", () => apply("dark"));
+})();
+
+/* ============================== Worker core (DP + search) ============================== */
+const WORKER_SRC = String.raw`
+const EMPTY = 0, OPEN = 1, CLOSE = 2, LONE = 3;
+const EMPTY_SET = new Set();
+
+function isOpen(grid, r, c) {
+  return r >= 0 && r < grid.rows && c >= 0 && c < grid.cols && !grid.blocked.has(r + "," + c);
+}
+function findPartner(combined, pos) {
+  const val = combined[pos];
+  if (val === OPEN) {
+    let bal = 1;
+    for (let k = pos + 1; k < combined.length; k++) {
+      const v = combined[k];
+      if (v === OPEN) bal++;
+      else if (v === CLOSE) { bal--; if (bal === 0) return k; }
+    }
+    throw new Error("no matching CLOSE");
+  } else if (val === CLOSE) {
+    let bal = 1;
+    for (let k = pos - 1; k >= 0; k--) {
+      const v = combined[k];
+      if (v === CLOSE) bal++;
+      else if (v === OPEN) { bal--; if (bal === 0) return k; }
+    }
+    throw new Error("no matching OPEN");
+  }
+  throw new Error("no partner for type " + val);
+}
+function restIsEmpty(combined, c) {
+  for (let i = 0; i < combined.length; i++) if (i !== c && i !== c + 1 && combined[i] !== EMPTY) return false;
+  return true;
+}
+function build(nc, c, downOut) {
+  return nc.slice(0, c).concat([downOut], nc.slice(c + 2));
+}
+function* transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq) {
+  const leftIn = combined[c], upIn = combined[c + 1];
+  if (isBlocked) {
+    if (leftIn !== EMPTY || upIn !== EMPTY) return;
+    yield ["cont", build(combined.slice(), c, EMPTY), EMPTY, ep];
+    return;
+  }
+  const forced = endpointReq === "forced";
+  if (leftIn === EMPTY && upIn === EMPTY) {
+    if (!forced && hasRight && hasDown) yield ["cont", build(combined.slice(), c, OPEN), CLOSE, ep];
+    if (allowLone && ep < maxEndpoints) {
+      if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), LONE, ep + 1];
+      if (hasDown) yield ["cont", build(combined.slice(), c, LONE), EMPTY, ep + 1];
+    }
+    return;
+  }
+  if ((leftIn === EMPTY) !== (upIn === EMPTY)) {
+    const x = leftIn || upIn;
+    const posX = leftIn !== EMPTY ? c : c + 1;
+    if (x === OPEN || x === CLOSE) {
+      if (!forced) {
+        if (hasDown) yield ["cont", build(combined.slice(), c, x), EMPTY, ep];
+        if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), x, ep];
+      }
+      if (allowLone && ep < maxEndpoints) {
+        const nc = combined.slice();
+        nc[findPartner(nc, posX)] = LONE;
+        yield ["cont", build(nc, c, EMPTY), EMPTY, ep + 1];
+      }
+    } else {
+      if (!forced) {
+        if (hasDown) yield ["cont", build(combined.slice(), c, LONE), EMPTY, ep];
+        if (hasRight) yield ["cont", build(combined.slice(), c, EMPTY), LONE, ep];
+      }
+      if (allowLone && isLast && ep + 1 === maxEndpoints && restIsEmpty(combined, c)) yield ["sol"];
+    }
+    return;
+  }
+  // Both incoming nonzero forces degree 2 -- invalid at a designated cell.
+  if (forced) return;
+  if (leftIn === LONE && upIn === LONE) {
+    if (isLast && restIsEmpty(combined, c)) yield ["sol"];
+    return;
+  }
+  if (leftIn === LONE || upIn === LONE) {
+    const pairedPos = (leftIn === OPEN || leftIn === CLOSE) ? c : c + 1;
+    const nc = combined.slice();
+    nc[findPartner(nc, pairedPos)] = LONE;
+    yield ["cont", build(nc, c, EMPTY), EMPTY, ep];
+    return;
+  }
+  const nc = combined.slice();
+  const partnerOfLeft = findPartner(nc, c);
+  if (partnerOfLeft === c + 1) {
+    if (isLast && !allowLone && restIsEmpty(combined, c)) yield ["sol"];
+    return;
+  }
+  const partnerOfUp = findPartner(nc, c + 1);
+  const p1 = Math.min(partnerOfLeft, partnerOfUp), p2 = Math.max(partnerOfLeft, partnerOfUp);
+  nc[p1] = OPEN; nc[p2] = CLOSE;
+  yield ["cont", build(nc, c, EMPTY), EMPTY, ep];
+}
+function keyOf(profile, left, ep) { return profile.join(",") + "|" + left + "|" + ep; }
+
+function countStructures(grid, mode, designated) {
+  designated = designated || EMPTY_SET;
+  const R = grid.rows, C = grid.cols;
+  const openMask = [];
+  for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push(isOpen(grid, r, c)); openMask.push(row); }
+  let numOpen = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) numOpen++;
+  if (numOpen === 0) return 0n;
+  if (numOpen === 1) return mode === "path" && designated.size <= 1 ? 1n : 0n;
+  if (mode === "cycle") {
+    let black = 0;
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c] && (r + c) % 2 === 0) black++;
+    if (black !== numOpen - black) return 0n;
+  }
+  const allowLone = mode === "path";
+  const maxEndpoints = allowLone ? 2 : 0;
+  let lastOpen = null;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) lastOpen = r * C + c;
+  let states = new Map();
+  states.set(keyOf(new Array(C).fill(EMPTY), EMPTY, 0), 1n);
+  let answer = 0n;
+  for (let r = 0; r < R; r++) {
+    const hasDown = r < R - 1;
+    for (let c = 0; c < C; c++) {
+      const hasRight = c < C - 1;
+      const isBlocked = !openMask[r][c];
+      const isLast = (r * C + c) === lastOpen;
+      const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
+      const nextStates = new Map();
+      for (const [key, ways] of states) {
+        const bar = key.indexOf("|"), bar2 = key.indexOf("|", bar + 1);
+        const profStr = key.slice(0, bar), left = Number(key.slice(bar + 1, bar2)), ep = Number(key.slice(bar2 + 1));
+        const profile = profStr.split(",").map(Number);
+        const combined = profile.slice(0, c).concat([left], profile.slice(c));
+        for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
+          if (outcome[0] === "sol") { answer += ways; }
+          else {
+            const k = keyOf(outcome[1], outcome[2], outcome[3]);
+            nextStates.set(k, (nextStates.get(k) || 0n) + ways);
+          }
+        }
+      }
+      states = nextStates;
+      if (states.size === 0) return answer;
+    }
+  }
+  return answer;
+}
+
+function bestOrientation(rows, cols, blockedArr) {
+  if (cols > rows) {
+    const t = new Set();
+    for (const [r, c] of blockedArr) t.add(c + "," + r);
+    return { rows: cols, cols: rows, blocked: t };
+  }
+  return { rows, cols, blocked: new Set(blockedArr.map(([r, c]) => r + "," + c)) };
+}
+
+function orientDesignated(designatedArr, transposed) {
+  if (!designatedArr || designatedArr.length === 0) return EMPTY_SET;
+  const s = new Set();
+  for (const [r, c] of designatedArr) s.add(transposed ? c + "," + r : r + "," + c);
+  return s;
+}
+
+function parseKey(key) {
+  const bar = key.indexOf("|"), bar2 = key.indexOf("|", bar + 1);
+  const profile = key.slice(0, bar).split(",").map(Number);
+  const left = Number(key.slice(bar + 1, bar2));
+  const ep = Number(key.slice(bar2 + 1));
+  return { profile, left, ep };
+}
+
+/* ---- indexed solution browsing: build once, then unrank(k) is instant ----
+   Forward pass keeps every step's reachable-state set (not just the last,
+   like countStructures does); a backward pass turns that into, for every
+   reachable state, "how many completions exist from here" -- which lets
+   unrank() walk straight to the k-th solution by comparing k against each
+   branch's completion count, the same way you'd find the page containing
+   item k in a stack of variously-sized page groups. */
+function buildSolutionIndex(rows, cols, blockedArr, mode, designatedArr) {
+  const transposed = cols > rows;
+  const grid = bestOrientation(rows, cols, blockedArr);
+  const designated = orientDesignated(designatedArr, transposed);
+  const R = grid.rows, C = grid.cols;
+  const openMask = [];
+  for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push(isOpen(grid, r, c)); openMask.push(row); }
+  let numOpen = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) numOpen++;
+
+  const allowLone = mode === "path";
+  const maxEndpoints = allowLone ? 2 : 0;
+
+  if (numOpen === 0) return null;
+  if (numOpen === 1) return mode === "path" && designated.size <= 1 ? { total: 1n, trivial: true, R, C, transposed } : null;
+  if (mode === "cycle") {
+    let black = 0;
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c] && (r + c) % 2 === 0) black++;
+    if (black !== numOpen - black) return null;
+  }
+
+  let lastOpen = null;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) lastOpen = r * C + c;
+
+  const totalSteps = R * C;
+  const reachablePerStep = new Array(totalSteps + 1);
+  reachablePerStep[0] = new Set([keyOf(new Array(C).fill(EMPTY), EMPTY, 0)]);
+  for (let t = 0; t < totalSteps; t++) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
+    const next = new Set();
+    for (const key of reachablePerStep[t]) {
+      const { profile, left, ep } = parseKey(key);
+      const combined = profile.slice(0, c).concat([left], profile.slice(c));
+      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
+        if (outcome[0] === "cont") next.add(keyOf(outcome[1], outcome[2], outcome[3]));
+      }
+    }
+    reachablePerStep[t + 1] = next;
+  }
+
+  const suffixPerStep = new Array(totalSteps + 1);
+  suffixPerStep[totalSteps] = new Map();
+  for (let t = totalSteps - 1; t >= 0; t--) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
+    const map = new Map();
+    for (const key of reachablePerStep[t]) {
+      const { profile, left, ep } = parseKey(key);
+      const combined = profile.slice(0, c).concat([left], profile.slice(c));
+      let sum = 0n;
+      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
+        if (outcome[0] === "sol") sum += 1n;
+        else sum += suffixPerStep[t + 1].get(keyOf(outcome[1], outcome[2], outcome[3])) || 0n;
+      }
+      map.set(key, sum);
+    }
+    suffixPerStep[t] = map;
+  }
+
+  const initKey = keyOf(new Array(C).fill(EMPTY), EMPTY, 0);
+  const total = suffixPerStep[0].get(initKey) || 0n;
+  if (total === 0n) return null;
+  return { total, R, C, openMask, lastOpen, allowLone, maxEndpoints, suffixPerStep, totalSteps, transposed, designated };
+}
+
+function unrankSolution(index, idx) {
+  if (idx.trivial) return [[0, 0]];
+  const { R, C, openMask, lastOpen, allowLone, maxEndpoints, suffixPerStep, totalSteps, designated } = idx;
+  const edges = [];
+  for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push({ up: false, down: false, left: false, right: false }); edges.push(row); }
+  let profile = new Array(C).fill(EMPTY), left = EMPTY, ep = 0;
+  let remaining = index;
+  for (let t = 0; t < totalSteps; t++) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
+    const combined = profile.slice(0, c).concat([left], profile.slice(c));
+    const upIn = combined[c + 1], leftIn = combined[c];
+    let chosen = null;
+    for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
+      const blockSize = outcome[0] === "sol" ? 1n : (suffixPerStep[t + 1].get(keyOf(outcome[1], outcome[2], outcome[3])) || 0n);
+      if (remaining < blockSize) { chosen = outcome; break; }
+      remaining -= blockSize;
+    }
+    if (!chosen) throw new Error("unrank: exhausted branches");
+    if (!isBlocked) {
+      const downOut = chosen[0] === "cont" ? chosen[1][c] : EMPTY;
+      const rightOut = chosen[0] === "cont" ? chosen[2] : EMPTY;
+      edges[r][c].up = upIn !== EMPTY;
+      edges[r][c].left = leftIn !== EMPTY;
+      edges[r][c].down = downOut !== EMPTY;
+      edges[r][c].right = rightOut !== EMPTY;
+    }
+    if (chosen[0] === "sol") break;
+    profile = chosen[1]; left = chosen[2]; ep = chosen[3];
+  }
+  return walkEdgesToPath(idx, edges);
+}
+
+function walkEdgesToPath(idx, edges) {
+  const { R, C, openMask, allowLone, transposed } = idx;
+  let start = null;
+  outer: for (let r = 0; r < R; r++) {
+    for (let c = 0; c < C; c++) {
+      if (!openMask[r][c]) continue;
+      const e = edges[r][c];
+      const deg = (e.up ? 1 : 0) + (e.down ? 1 : 0) + (e.left ? 1 : 0) + (e.right ? 1 : 0);
+      if (allowLone ? deg === 1 : true) { start = [r, c]; break outer; }
+    }
+  }
+  const path = [start];
+  const visited = new Set([start[0] + "," + start[1]]);
+  let cur = start, cameFrom = null;
+  while (true) {
+    const [r, c] = cur;
+    const e = edges[r][c];
+    const candidates = [];
+    if (e.up) candidates.push([r - 1, c]);
+    if (e.down) candidates.push([r + 1, c]);
+    if (e.left) candidates.push([r, c - 1]);
+    if (e.right) candidates.push([r, c + 1]);
+    let next = null;
+    for (const cand of candidates) {
+      if (cameFrom && cand[0] === cameFrom[0] && cand[1] === cameFrom[1]) continue;
+      next = cand; break;
+    }
+    if (next === null) break;
+    const nk = next[0] + "," + next[1];
+    if (visited.has(nk)) break;
+    path.push(next); visited.add(nk); cameFrom = cur; cur = next;
+  }
+  return path.map(([r, c]) => (transposed ? [c, r] : [r, c]));
+}
+
+/* ---- inverse of walkEdgesToPath: rebuild the DP-space edges grid from a
+   geometric cell list, so a solution found some other way (e.g. by the
+   turn-ranking DP below) can be located in this DP's own enumeration. ---- */
+function edgesFromCells(cells, R, C, transposed, isCycle) {
+  const edges = [];
+  for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push({ up: false, down: false, left: false, right: false }); edges.push(row); }
+  const toDp = ([r, c]) => (transposed ? [c, r] : [r, c]);
+  function connect(a, b) {
+    const [ar, ac] = toDp(a), [br, bc] = toDp(b);
+    if (ar === br && bc === ac + 1) { edges[ar][ac].right = true; edges[br][bc].left = true; }
+    else if (ar === br && bc === ac - 1) { edges[ar][ac].left = true; edges[br][bc].right = true; }
+    else if (ac === bc && br === ar + 1) { edges[ar][ac].down = true; edges[br][bc].up = true; }
+    else if (ac === bc && br === ar - 1) { edges[ar][ac].up = true; edges[br][bc].down = true; }
+  }
+  const n = cells.length;
+  for (let i = 0; i + 1 < n; i++) connect(cells[i], cells[i + 1]);
+  if (isCycle && n > 1) connect(cells[n - 1], cells[0]);
+  return edges;
+}
+
+/* Inverse of unrankSolution: given a known solution's edges grid, walk the
+   same forward sweep and, at each step, find the transitions() candidate
+   whose local (down,right) edges match the known solution (up/left are
+   already fixed by the profile inherited from earlier steps, so this is
+   never ambiguous -- transitions() yields at most one candidate per local
+   edge pattern), accumulating the sizes of every candidate skipped along
+   the way. That accumulated total is exactly the solution's rank -- the
+   same computation unrankSolution runs in reverse. */
+function indexOfSolution(edgesGrid, idx) {
+  if (idx.trivial) return 0n;
+  const { R, C, openMask, lastOpen, allowLone, maxEndpoints, suffixPerStep, totalSteps, designated } = idx;
+  let profile = new Array(C).fill(EMPTY), left = EMPTY, ep = 0;
+  let acc = 0n;
+  for (let t = 0; t < totalSteps; t++) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
+    const combined = profile.slice(0, c).concat([left], profile.slice(c));
+    let chosen = null;
+    for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
+      const downOut = outcome[0] === "cont" ? outcome[1][c] : EMPTY;
+      const rightOut = outcome[0] === "cont" ? outcome[2] : EMPTY;
+      const matches = (downOut !== EMPTY) === edgesGrid[r][c].down && (rightOut !== EMPTY) === edgesGrid[r][c].right;
+      if (matches) { chosen = outcome; break; }
+      acc += outcome[0] === "sol" ? 1n : (suffixPerStep[t + 1].get(keyOf(outcome[1], outcome[2], outcome[3])) || 0n);
+    }
+    if (!chosen) throw new Error("indexOfSolution: no matching branch at step " + t);
+    if (chosen[0] === "sol") break;
+    profile = chosen[1]; left = chosen[2]; ep = chosen[3];
+  }
+  return acc;
+}
+
+/* ---- ranking by a secondary metric (currently: number of turns) ----
+   "k-best" dynamic programming: instead of one number per (step, state)
+   ("how many completions from here"), track the RANK_TOP_K smallest (or
+   largest) distinct metric totals reachable from here, each paired with
+   how many completions achieve exactly that total. This is exact, not an
+   approximation: the global top-K can only ever be built from choices
+   that are themselves within their own state's top-K (if a step used a
+   choice outside its local top-K, there'd be K other equal-or-better
+   alternatives there, contradicting that the result is globally top-K).
+   So truncating to K per state, propagated backward, is exact. */
+const RANK_TOP_K = 12; // must be >= how many ranked examples we ever ask for
+
+function isTurn(up, left, down, right) {
+  const n = (up ? 1 : 0) + (left ? 1 : 0) + (down ? 1 : 0) + (right ? 1 : 0);
+  if (n !== 2) return 0;
+  if (up && down) return 0;
+  if (left && right) return 0;
+  return 1;
+}
+
+function mergeTruncateRanked(lists, direction, k) {
+  const merged = new Map();
+  for (const list of lists) for (const { value, count } of list) merged.set(value, (merged.get(value) || 0n) + count);
+  const arr = [...merged.entries()].map(([value, count]) => ({ value, count }));
+  arr.sort((a, b) => (direction === "min" ? a.value - b.value : b.value - a.value));
+  return arr.slice(0, k);
+}
+
+function buildTurnRanking(rows, cols, blockedArr, mode, designatedArr, direction) {
+  const transposed = cols > rows;
+  const grid = bestOrientation(rows, cols, blockedArr);
+  const designated = orientDesignated(designatedArr, transposed);
+  const R = grid.rows, C = grid.cols;
+  const openMask = [];
+  for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push(isOpen(grid, r, c)); openMask.push(row); }
+  let numOpen = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) numOpen++;
+  const allowLone = mode === "path";
+  const maxEndpoints = allowLone ? 2 : 0;
+
+  if (numOpen === 0) return null;
+  if (numOpen === 1) return mode === "path" && designated.size <= 1 ? { buckets: [{ value: 0, count: 1n }], trivial: true, R, C, transposed } : null;
+  if (mode === "cycle") {
+    let black = 0;
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c] && (r + c) % 2 === 0) black++;
+    if (black !== numOpen - black) return null;
+  }
+
+  let lastOpen = null;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (openMask[r][c]) lastOpen = r * C + c;
+  const totalSteps = R * C;
+
+  const reachablePerStep = new Array(totalSteps + 1);
+  reachablePerStep[0] = new Set([keyOf(new Array(C).fill(EMPTY), EMPTY, 0)]);
+  for (let t = 0; t < totalSteps; t++) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
+    const next = new Set();
+    for (const key of reachablePerStep[t]) {
+      const { profile, left, ep } = parseKey(key);
+      const combined = profile.slice(0, c).concat([left], profile.slice(c));
+      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
+        if (outcome[0] === "cont") next.add(keyOf(outcome[1], outcome[2], outcome[3]));
+      }
+    }
+    reachablePerStep[t + 1] = next;
+  }
+
+  const rankPerStep = new Array(totalSteps + 1);
+  rankPerStep[totalSteps] = new Map();
+  for (let t = totalSteps - 1; t >= 0; t--) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
+    const map = new Map();
+    for (const key of reachablePerStep[t]) {
+      const { profile, left, ep } = parseKey(key);
+      const combined = profile.slice(0, c).concat([left], profile.slice(c));
+      const upIn = combined[c + 1], leftIn = combined[c];
+      const lists = [];
+      for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
+        if (outcome[0] === "sol") {
+          lists.push([{ value: isTurn(upIn !== EMPTY, leftIn !== EMPTY, false, false), count: 1n }]);
+        } else {
+          const downOut = outcome[1][c], rightOut = outcome[2];
+          const delta = isTurn(upIn !== EMPTY, leftIn !== EMPTY, downOut !== EMPTY, rightOut !== EMPTY);
+          const childList = rankPerStep[t + 1].get(keyOf(outcome[1], outcome[2], outcome[3])) || [];
+          lists.push(childList.map(({ value, count }) => ({ value: value + delta, count })));
+        }
+      }
+      map.set(key, mergeTruncateRanked(lists, direction, RANK_TOP_K));
+    }
+    rankPerStep[t] = map;
+  }
+
+  const initKey = keyOf(new Array(C).fill(EMPTY), EMPTY, 0);
+  const buckets = rankPerStep[0].get(initKey) || [];
+  if (buckets.length === 0) return null;
+  return { buckets, R, C, openMask, lastOpen, allowLone, maxEndpoints, rankPerStep, totalSteps, transposed, designated, direction };
+}
+
+function extractRankedExample(targetValue, rankWithinBucket, idx) {
+  if (idx.trivial) return [[0, 0]];
+  const { R, C, openMask, lastOpen, allowLone, maxEndpoints, rankPerStep, totalSteps, designated } = idx;
+  const edges = [];
+  for (let r = 0; r < R; r++) { const row = []; for (let c = 0; c < C; c++) row.push({ up: false, down: false, left: false, right: false }); edges.push(row); }
+  let profile = new Array(C).fill(EMPTY), left = EMPTY, ep = 0;
+  let remainingTarget = targetValue, remainingRank = rankWithinBucket;
+  for (let t = 0; t < totalSteps; t++) {
+    const r = Math.floor(t / C), c = t % C;
+    const hasRight = c < C - 1, hasDown = r < R - 1;
+    const isBlocked = !openMask[r][c];
+    const isLast = t === lastOpen;
+    const endpointReq = designated.has(r + "," + c) ? "forced" : "free";
+    const combined = profile.slice(0, c).concat([left], profile.slice(c));
+    const upIn = combined[c + 1], leftIn = combined[c];
+    let chosen = null;
+    for (const outcome of transitions(combined, c, hasRight, hasDown, isBlocked, isLast, allowLone, maxEndpoints, ep, endpointReq)) {
+      let delta, childKey = null;
+      if (outcome[0] === "sol") {
+        delta = isTurn(upIn !== EMPTY, leftIn !== EMPTY, false, false);
+      } else {
+        const downOut = outcome[1][c], rightOut = outcome[2];
+        delta = isTurn(upIn !== EMPTY, leftIn !== EMPTY, downOut !== EMPTY, rightOut !== EMPTY);
+        childKey = keyOf(outcome[1], outcome[2], outcome[3]);
+      }
+      const need = remainingTarget - delta;
+      if (need < 0) continue;
+      let blockSize;
+      if (outcome[0] === "sol") blockSize = need === 0 ? 1n : 0n;
+      else {
+        const childList = rankPerStep[t + 1].get(childKey) || [];
+        const entry = childList.find((e) => e.value === need);
+        blockSize = entry ? entry.count : 0n;
+      }
+      if (blockSize === 0n) continue;
+      if (remainingRank < blockSize) { chosen = outcome; remainingTarget = need; break; }
+      remainingRank -= blockSize;
+    }
+    if (!chosen) throw new Error("extractRankedExample: exhausted branches");
+    if (!isBlocked) {
+      const downOut = chosen[0] === "cont" ? chosen[1][c] : EMPTY;
+      const rightOut = chosen[0] === "cont" ? chosen[2] : EMPTY;
+      edges[r][c].up = upIn !== EMPTY;
+      edges[r][c].left = leftIn !== EMPTY;
+      edges[r][c].down = downOut !== EMPTY;
+      edges[r][c].right = rightOut !== EMPTY;
+    }
+    if (chosen[0] === "sol") break;
+    profile = chosen[1]; left = chosen[2]; ep = chosen[3];
+  }
+  return walkEdgesToPath(idx, edges);
+}
+
+function topRankedExamples(idx, n) {
+  const out = [];
+  for (const { value, count } of idx.buckets) {
+    const take = count < BigInt(n - out.length) ? count : BigInt(n - out.length);
+    for (let k = 0n; k < take; k++) out.push({ turns: value, cells: extractRankedExample(value, k, idx) });
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+const navCache = new Map(); // "rows|cols|blockedSorted|mode|designatedSorted" -> index object (or null)
+const rankCache = new Map(); // same key + "|" + direction -> ranking object (or null)
+
+function randomBigIntBelow(total) {
+  const bits = total.toString(2).length;
+  let r;
+  do {
+    r = 0n;
+    let remaining = bits;
+    while (remaining > 0) {
+      const take = Math.min(30, remaining);
+      r = (r << BigInt(take)) | BigInt(Math.floor(Math.random() * (1 << take)));
+      remaining -= take;
+    }
+  } while (r >= total);
+  return r;
+}
+
+function designatedCacheKey(designated) {
+  if (!designated || designated.length === 0) return "";
+  return designated.map((p) => p.join(",")).sort().join(";");
+}
+
+// A cycle has no true start, so browsing it always visits the same cells --
+// this just rotates the returned list to *display* it starting from the
+// chosen cell, purely cosmetic.
+function rotateCycleToStart(cells, startCell) {
+  if (!startCell) return cells;
+  const i = cells.findIndex(([r, c]) => r === startCell[0] && c === startCell[1]);
+  if (i <= 0) return cells;
+  return cells.slice(i).concat(cells.slice(0, i));
+}
+
+self.onmessage = function (e) {
+  const { id, type, rows, cols, blocked, mode, index, startCell, designated, direction, count } = e.data;
+  try {
+    if (type === "count") {
+      const t0 = performance.now();
+      const cycles = countStructures(bestOrientation(rows, cols, blocked), "cycle");
+      self.postMessage({ id, type: "count-partial", metric: "cycles", value: cycles.toString(), ms: performance.now() - t0 });
+      const t1 = performance.now();
+      const paths = countStructures(bestOrientation(rows, cols, blocked), "path", orientDesignated(designated, cols > rows));
+      self.postMessage({ id, type: "count-partial", metric: "paths", value: paths.toString(), ms: performance.now() - t1 });
+      self.postMessage({ id, type: "count-done" });
+    } else if (type === "nav") {
+      const cacheKey = rows + "|" + cols + "|" + blocked.map((p) => p.join(",")).sort().join(";") + "|" + mode + "|" + designatedCacheKey(designated);
+      let idx = navCache.get(cacheKey);
+      if (idx === undefined) {
+        self.postMessage({ id, type: "nav-building" });
+        idx = buildSolutionIndex(rows, cols, blocked, mode, designated);
+        navCache.set(cacheKey, idx);
+      }
+      if (!idx) {
+        self.postMessage({ id, type: "nav-empty", mode });
+        return;
+      }
+      let i;
+      if (index === "random") {
+        i = randomBigIntBelow(idx.total);
+      } else {
+        i = BigInt(index);
+        if (i < 0n) i = 0n;
+        if (i >= idx.total) i = idx.total - 1n;
+      }
+      let cells = unrankSolution(i, idx);
+      if (mode === "cycle" && startCell) cells = rotateCycleToStart(cells, startCell);
+      self.postMessage({ id, type: "nav-result", mode, index: i.toString(), total: idx.total.toString(), cells });
+    } else if (type === "rank") {
+      const rankDirection = direction === "max" ? "max" : "min";
+      const wantCount = count || 10;
+      const navCacheKey = rows + "|" + cols + "|" + blocked.map((p) => p.join(",")).sort().join(";") + "|" + mode + "|" + designatedCacheKey(designated);
+      const cacheKey = navCacheKey + "|" + rankDirection;
+      let idx = rankCache.get(cacheKey);
+      if (idx === undefined) {
+        self.postMessage({ id, type: "rank-building" });
+        idx = buildTurnRanking(rows, cols, blocked, mode, designated, rankDirection);
+        rankCache.set(cacheKey, idx);
+      }
+      if (!idx) {
+        self.postMessage({ id, type: "rank-empty", mode });
+        return;
+      }
+      // Also get (or build) the plain browse index for the same grid/mode/
+      // designated cells, so each ranked entry can report the actual
+      // solution number it corresponds to in "any order" browsing -- the
+      // two views share one numbering instead of the rank list inventing
+      // its own #1..#10 disconnected from it.
+      let navIdx = navCache.get(navCacheKey);
+      if (navIdx === undefined) {
+        navIdx = buildSolutionIndex(rows, cols, blocked, mode, designated);
+        navCache.set(navCacheKey, navIdx);
+      }
+      const examples = topRankedExamples(idx, wantCount);
+      const entries = examples.map(({ turns, cells }) => {
+        const finalCells = mode === "cycle" && startCell ? rotateCycleToStart(cells, startCell) : cells;
+        let solIndex = null, solTotal = null;
+        if (navIdx) {
+          const edgesGrid = edgesFromCells(finalCells, navIdx.R, navIdx.C, navIdx.transposed, mode === "cycle");
+          solIndex = indexOfSolution(edgesGrid, navIdx).toString();
+          solTotal = navIdx.total.toString();
+        }
+        return { turns, cells: finalCells, index: solIndex, total: solTotal };
+      });
+      self.postMessage({ id, type: "rank-result", mode, direction: rankDirection, entries });
+    }
+  } catch (err) {
+    self.postMessage({ id, type: "error", message: String(err && err.message || err) });
+  }
+};
+`;
+
+let worker = null;
+let currentRequestId = 0;
+
+function spawnWorker() {
+  // About to orphan the current worker (and whatever request it's mid-way
+  // through) -- re-enable anything that was waiting on it, so a button
+  // toggled mid-request (e.g. the debounced grid recompute firing while a
+  // "browse" or "rank" request is in flight) can never get stuck disabled
+  // forever.
+  setBrowseControlsEnabled(true);
+  if (worker) { try { worker.terminate(); } catch (e) {} }
+  const blob = new Blob([WORKER_SRC], { type: "text/javascript" });
+  worker = new Worker(URL.createObjectURL(blob));
+  worker.onmessage = handleWorkerMessage;
+  return worker;
+}
+
+/* ============================== Eulerian walk algorithms ==============================
+   Runs on the main thread, not the worker: unlike the Hamiltonian DP, degree
+   analysis, Hierholzer's algorithm and the Route Inspection matching below
+   are all sub-50ms even at 10x10, so there's no need to offload them. Grid
+   graph: vertices = open cells, edges = 4-directional adjacency between two
+   open cells. Undirected, unweighted (each grid edge has length 1). */
+
+function buildGraph(rows, cols, blockedArr) {
+  const blocked = new Set(blockedArr.map(([r, c]) => r + "," + c));
+  const key = (r, c) => r + "," + c;
+  const open = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) if (!blocked.has(key(r, c))) open.push([r, c]);
+  const index = new Map(open.map((p, i) => [key(p[0], p[1]), i]));
+  const n = open.length;
+  const DIRS = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+  const adj = Array.from({ length: n }, () => new Set());
+  const edgeSet = new Set(); // canonical "i-j" (i<j) for each physical grid edge
+  for (let i = 0; i < n; i++) {
+    const [r, c] = open[i];
+    for (const [dr, dc] of DIRS) {
+      const j = index.get(key(r + dr, c + dc));
+      if (j !== undefined) {
+        adj[i].add(j);
+        edgeSet.add(i < j ? `${i}-${j}` : `${j}-${i}`);
+      }
+    }
+  }
+  const degree = open.map((_, i) => adj[i].size);
+  return { open, index, adj, degree, n, edgeCount: edgeSet.size };
+}
+
+/* Connected components restricted to vertices that have at least one edge
+   (isolated open cells, degree 0, are reported separately -- they can never
+   be touched by any edge-walk). Each component's own vertex-degree sum is
+   always even (it's 2x that component's edge count), so each one
+   independently has an even number of odd-degree vertices -- matching never
+   needs to look outside a single component. */
+function edgeConnectedComponents(graph) {
+  const { n, adj, degree } = graph;
+  const seen = new Array(n).fill(false);
+  const comps = [];
+  for (let s = 0; s < n; s++) {
+    if (degree[s] === 0 || seen[s]) continue;
+    const comp = [];
+    const stack = [s];
+    seen[s] = true;
+    while (stack.length) {
+      const v = stack.pop();
+      comp.push(v);
+      for (const w of adj[v]) if (!seen[w]) { seen[w] = true; stack.push(w); }
+    }
+    comps.push(comp);
+  }
+  return comps;
+}
+
+/* Euler's theorem classification for the whole grid. */
+function classify(graph) {
+  const { n, degree, edgeCount } = graph;
+  const isolated = [];
+  for (let i = 0; i < n; i++) if (degree[i] === 0) isolated.push(i);
+  if (edgeCount === 0) return { kind: "empty", isolated };
+
+  const comps = edgeConnectedComponents(graph);
+  const oddVerts = [];
+  for (let i = 0; i < n; i++) if (degree[i] % 2 === 1) oddVerts.push(i);
+
+  if (comps.length > 1) return { kind: "disconnected", isolated, components: comps.length, odd: oddVerts };
+  if (oddVerts.length === 0) return { kind: "circuit", isolated, odd: oddVerts, start: comps[0][0] };
+  if (oddVerts.length === 2) return { kind: "path", isolated, odd: oddVerts, start: oddVerts[0], end: oddVerts[1] };
+  return { kind: "impossible", isolated, odd: oddVerts };
+}
+
+/* Hierholzer's algorithm over a LOCAL vertex set (0..n-1) and an explicit
+   edge list (each entry one traversable copy of a physical or duplicated
+   edge). Every vertex touched by `edgeList` must have even degree. Returns
+   the walk as a vertex sequence plus which edge-list index was used for
+   each step, in order. */
+function hierholzer(n, edgeList, start) {
+  const adj = Array.from({ length: n }, () => []);
+  edgeList.forEach(([u, v], id) => {
+    adj[u].push({ to: v, id });
+    adj[v].push({ to: u, id });
+  });
+  const used = new Array(edgeList.length).fill(false);
+  const ptr = new Array(n).fill(0);
+  const vertexStack = [start];
+  const edgeStack = [];
+  const outVerts = [];
+  const outEdges = [];
+  while (vertexStack.length) {
+    const v = vertexStack[vertexStack.length - 1];
+    let advanced = false;
+    while (ptr[v] < adj[v].length) {
+      const { to, id } = adj[v][ptr[v]];
+      ptr[v]++;
+      if (used[id]) continue;
+      used[id] = true;
+      vertexStack.push(to);
+      edgeStack.push(id);
+      advanced = true;
+      break;
+    }
+    if (!advanced) {
+      outVerts.push(vertexStack.pop());
+      if (edgeStack.length) outEdges.push(edgeStack.pop());
+    }
+  }
+  outVerts.reverse();
+  outEdges.reverse();
+  return { verts: outVerts, edges: outEdges, usedAll: used.every(Boolean) };
+}
+
+/* ---- shortest paths + minimum-weight perfect matching (Route Inspection) ---- */
+
+function bfsDistances(graph, source) {
+  const { n, adj } = graph;
+  const dist = new Array(n).fill(-1);
+  const parent = new Array(n).fill(-1);
+  dist[source] = 0;
+  const queue = [source];
+  let qi = 0;
+  while (qi < queue.length) {
+    const v = queue[qi++];
+    for (const w of adj[v]) if (dist[w] === -1) { dist[w] = dist[v] + 1; parent[w] = v; queue.push(w); }
+  }
+  return { dist, parent };
+}
+
+function shortestPath(parent, target) {
+  const path = [];
+  let cur = target;
+  while (cur !== -1) { path.push(cur); cur = parent[cur]; }
+  return path.reverse();
+}
+
+/* Exact minimum-weight perfect matching via bitmask DP over k items
+   (k must be even). cost[i][j] is symmetric. O(2^k * k). */
+function minWeightMatchingBitmask(k, cost) {
+  const FULL = (1 << k) - 1;
+  const dp = new Array(1 << k).fill(Infinity);
+  const choice = new Array(1 << k).fill(-1);
+  dp[0] = 0;
+  for (let mask = 0; mask <= FULL; mask++) {
+    if (dp[mask] === Infinity) continue;
+    let i = -1;
+    for (let b = 0; b < k; b++) if (!(mask & (1 << b))) { i = b; break; }
+    if (i === -1) continue;
+    for (let j = i + 1; j < k; j++) {
+      if (mask & (1 << j)) continue;
+      const nmask = mask | (1 << i) | (1 << j);
+      const ncost = dp[mask] + cost[i][j];
+      if (ncost < dp[nmask]) { dp[nmask] = ncost; choice[nmask] = i * 64 + j; }
+    }
+  }
+  const pairs = [];
+  let mask = FULL;
+  while (mask !== 0) {
+    const enc = choice[mask];
+    const i = Math.floor(enc / 64), j = enc % 64;
+    pairs.push([i, j]);
+    mask ^= (1 << i) | (1 << j);
+  }
+  return { pairs, total: dp[FULL] };
+}
+
+const BITMASK_MATCH_CAP = 20; // 2^20 * 20 ~= 20M ops, comfortably fast; grows too
+// slow and too memory-hungry well before k=26 to push much further (true
+// general minimum-weight perfect matching needs Edmonds' blossom algorithm
+// for polynomial-time exactness at the scale a 10x10 grid's boundary can
+// produce -- up to ~40 odd-degree cells on an otherwise-bare grid. Rather
+// than risk shipping a subtly-wrong hand-rolled blossom implementation,
+// above the cap this uses a strong, honestly-labeled heuristic instead.
+
+/* Greedy-by-cheapest-edge matching: repeatedly take the globally cheapest
+   still-available pair (not just "nearest to an arbitrary start", which is
+   markedly weaker). This is the classical greedy matching heuristic, within
+   2x of optimal in the worst case and typically much closer for metric
+   costs like grid shortest-path distance. */
+function greedyEdgeMatching(k, cost) {
+  const pairs = [];
+  for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) pairs.push([i, j, cost[i][j]]);
+  pairs.sort((a, b) => a[2] - b[2]);
+  const used = new Array(k).fill(false);
+  const result = [];
+  let total = 0;
+  for (const [i, j, c] of pairs) {
+    if (used[i] || used[j]) continue;
+    used[i] = used[j] = true;
+    result.push([i, j]);
+    total += c;
+  }
+  return { pairs: result, total };
+}
+
+/* Local-search improvement: repeatedly look for two matched pairs whose
+   cross-pairing (swap one endpoint between them) is cheaper, and take it.
+   Runs until a full pass finds no improvement or a pass budget is spent.
+   Standard pairwise-exchange local search for the matching/TSP family --
+   doesn't guarantee the global optimum, but reliably closes most of the
+   gap a plain greedy match leaves open. */
+function localSearchImprove(pairsIn, cost, maxPasses) {
+  let pairs = pairsIn.map((p) => p.slice());
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let improved = false;
+    for (let a = 0; a < pairs.length; a++) {
+      for (let b = a + 1; b < pairs.length; b++) {
+        const [i, j] = pairs[a], [p, q] = pairs[b];
+        const current = cost[i][j] + cost[p][q];
+        const swap1 = cost[i][p] + cost[j][q];
+        const swap2 = cost[i][q] + cost[j][p];
+        if (swap1 < current && swap1 <= swap2) { pairs[a] = [i, p]; pairs[b] = [j, q]; improved = true; }
+        else if (swap2 < current) { pairs[a] = [i, q]; pairs[b] = [j, p]; improved = true; }
+      }
+    }
+    if (!improved) break;
+  }
+  let total = 0;
+  for (const [i, j] of pairs) total += cost[i][j];
+  return { pairs, total };
+}
+
+function heuristicMatching(k, cost) {
+  const greedy = greedyEdgeMatching(k, cost);
+  const improved = localSearchImprove(greedy.pairs, cost, 8);
+  return { pairs: improved.pairs, total: improved.total, approximate: true };
+}
+
+/* Route Inspection (Chinese Postman) for ONE connected component, given as
+   a list of global vertex indices. Produces the shortest CLOSED walk that
+   covers every edge of that component at least once. If the component is
+   already Eulerian (0 odd vertices), this degenerates to the plain
+   Eulerian circuit with zero retraces. */
+function routeInspectComponent(graph, compVerts) {
+  const localIndex = new Map(compVerts.map((v, i) => [v, i]));
+  const m = compVerts.length;
+  const localAdj = Array.from({ length: m }, () => []);
+  const baseEdges = [];
+  const seenEdge = new Set();
+  for (const v of compVerts) {
+    const li = localIndex.get(v);
+    for (const w of graph.adj[v]) {
+      const lj = localIndex.get(w);
+      localAdj[li].push(lj);
+      const k = li < lj ? li + "-" + lj : lj + "-" + li;
+      if (seenEdge.has(k)) continue;
+      seenEdge.add(k);
+      baseEdges.push([li, lj]);
+    }
+  }
+  const physicalEdgeCount = baseEdges.length;
+  const localGraph = { n: m, adj: localAdj };
+
+  const degree = new Array(m).fill(0);
+  for (const [u, v] of baseEdges) { degree[u]++; degree[v]++; }
+  const odds = [];
+  for (let i = 0; i < m; i++) if (degree[i] % 2 === 1) odds.push(i);
+
+  let matching = null, approximate = false;
+  if (odds.length > 0) {
+    const distFromOdd = odds.map((v) => bfsDistances(localGraph, v));
+    const k = odds.length;
+    const cost = Array.from({ length: k }, (_, i) => Array.from({ length: k }, (_, j) => (i === j ? 0 : distFromOdd[i].dist[odds[j]])));
+    if (k <= BITMASK_MATCH_CAP) {
+      matching = minWeightMatchingBitmask(k, cost);
+    } else {
+      matching = heuristicMatching(k, cost);
+      approximate = true;
+    }
+    for (const [ia, ib] of matching.pairs) {
+      const path = shortestPath(distFromOdd[ia].parent, odds[ib]);
+      for (let t = 0; t + 1 < path.length; t++) baseEdges.push([path[t], path[t + 1]]);
+    }
+  }
+
+  const result = hierholzer(m, baseEdges, 0);
+  return {
+    verts: result.verts.map((i) => compVerts[i]),
+    retraced: result.edges.map((id) => id >= physicalEdgeCount),
+    physicalEdgeCount,
+    retracedCount: baseEdges.length - physicalEdgeCount,
+    matching,
+    approximate,
+    usedAll: result.usedAll,
+  };
+}
+
+function spanningWalk(graph) {
+  const comps = edgeConnectedComponents(graph);
+  return comps.map((compVerts) => routeInspectComponent(graph, compVerts));
+}
+
+/* Plain Eulerian walk (no retracing), only valid when a classify() call
+   reports kind "circuit" or "path" for the whole grid. */
+function eulerianWalk(graph, startVertex) {
+  const baseEdges = [];
+  const seenEdge = new Set();
+  for (let i = 0; i < graph.n; i++) for (const j of graph.adj[i]) {
+    const k = i < j ? i + "-" + j : j + "-" + i;
+    if (seenEdge.has(k)) continue;
+    seenEdge.add(k);
+    baseEdges.push([i, j]);
+  }
+  const result = hierholzer(graph.n, baseEdges, startVertex);
+  return { verts: result.verts, usedAll: result.usedAll };
+}
+
+/* ============================== App state ============================== */
+const state = {
+  rows: 6,
+  cols: 6,
+  blocked: new Set(), // "r,c"
+  route: null, // { cells: [[r,c],...], mode: "path"|"cycle" }
+  browseMode: null, // null | "path" | "cycle" -- which mode the nav toolbar is showing
+  browseTotal: { path: null, cycle: null }, // BigInt totals once known, per mode
+  browseOrder: "any", // "any" | "min" | "max" -- which sweep populates the results below
+  editMode: "cells", // "cells" | "endpoints"
+  startCell: null, // [r,c] or null
+  endCell: null, // [r,c] or null (path mode only; ignored for cycles)
+  rankEntries: null, // [{turns, cells}, ...] once computed
+  rankActiveIndex: null, // which rankEntries row is currently shown on the grid
+  rankMode: null, // "path" | "cycle" -- which mode rankEntries is for
+  walkType: "hamiltonian", // "hamiltonian" | "eulerian"
+  eulerGraph: null, // buildGraph() result for the current grid, kept alongside eulerInfo
+  eulerInfo: null, // classify() result for the current grid
+  eulerRoute: null, // { cells: [[r,c],...], closed, retraced: [bool,...] | null } once traced
+};
+
+const MIN_N = 2, MAX_N = 10;
+const els = {
+  rowsVal: document.getElementById("rows-val"),
+  colsVal: document.getElementById("cols-val"),
+  rowsDec: document.getElementById("rows-dec"),
+  rowsInc: document.getElementById("rows-inc"),
+  colsDec: document.getElementById("cols-dec"),
+  colsInc: document.getElementById("cols-inc"),
+  clearBtn: document.getElementById("btn-clear"),
+  randomizeBtn: document.getElementById("btn-randomize"),
+  gridSvg: document.getElementById("grid-svg"),
+  gridNote: document.getElementById("grid-note"),
+  pathsValue: document.getElementById("paths-value"),
+  cyclesValue: document.getElementById("cycles-value"),
+  progressWrap: document.getElementById("progress-wrap"),
+  progressNote: document.getElementById("progress-note"),
+  timingNote: document.getElementById("timing-note"),
+  routeCaption: document.getElementById("route-caption"),
+  orderAnyBtn: document.getElementById("order-any"),
+  orderMinBtn: document.getElementById("order-min-turns"),
+  orderMaxBtn: document.getElementById("order-max-turns"),
+  browsePathBtn: document.getElementById("btn-browse-path"),
+  browseCycleBtn: document.getElementById("btn-browse-cycle"),
+  navRow: document.getElementById("nav-row"),
+  navPrev: document.getElementById("nav-prev"),
+  navNext: document.getElementById("nav-next"),
+  navReadout: document.getElementById("nav-readout"),
+  navJumpForm: document.getElementById("nav-jump-form"),
+  navJumpInput: document.getElementById("nav-jump-input"),
+  navRandomBtn: document.getElementById("nav-random-btn"),
+  browseStatus: document.getElementById("browse-status"),
+  tooltip: document.getElementById("tooltip"),
+  modeCellsBtn: document.getElementById("mode-cells"),
+  modeEndpointsBtn: document.getElementById("mode-endpoints"),
+  cellsBtnRow: document.getElementById("cells-btn-row"),
+  endpointsBtnRow: document.getElementById("endpoints-btn-row"),
+  clearEndpointsBtn: document.getElementById("btn-clear-endpoints"),
+  gridCardSub: document.getElementById("grid-card-sub"),
+  endpointsNote: document.getElementById("endpoints-note"),
+  resultsSub: document.getElementById("results-sub"),
+  pathsLabel: document.getElementById("paths-label"),
+  rankList: document.getElementById("rank-list"),
+  walkHamiltonianBtn: document.getElementById("walk-hamiltonian"),
+  walkEulerianBtn: document.getElementById("walk-eulerian"),
+  cellModeRow: document.getElementById("cell-mode-row"),
+  hamiltonianCard: document.getElementById("hamiltonian-card"),
+  eulerCard: document.getElementById("euler-card"),
+  chartSection: document.getElementById("chart-section"),
+  eulerEdgesValue: document.getElementById("euler-edges-value"),
+  eulerOddValue: document.getElementById("euler-odd-value"),
+  eulerStatus: document.getElementById("euler-status"),
+  eulerRouteCaption: document.getElementById("euler-route-caption"),
+  eulerWalkBtn: document.getElementById("btn-euler-walk"),
+  spanningWalkBtn: document.getElementById("btn-spanning-walk"),
+};
+
+function fmtCell([r, c]) { return `(${r + 1}, ${c + 1})`; }
+
+/* Describes the current start/end constraint in prose, for the given mode. */
+function constraintPhrase(mode) {
+  if (mode === "cycle") return state.startCell ? ` starting at ${fmtCell(state.startCell)}` : "";
+  if (state.startCell && state.endCell) return ` from ${fmtCell(state.startCell)} to ${fmtCell(state.endCell)}`;
+  if (state.startCell) return ` starting at ${fmtCell(state.startCell)}`;
+  if (state.endCell) return ` ending at ${fmtCell(state.endCell)}`;
+  return "";
+}
+
+function designatedCellsArray() {
+  const arr = [];
+  if (state.startCell) arr.push(state.startCell);
+  if (state.endCell) arr.push(state.endCell);
+  return arr;
+}
+
+function clampDim(n) { return Math.max(MIN_N, Math.min(MAX_N, n)); }
+
+function pruneBlockedToBounds() {
+  const next = new Set();
+  for (const key of state.blocked) {
+    const [r, c] = key.split(",").map(Number);
+    if (r < state.rows && c < state.cols) next.add(key);
+  }
+  state.blocked = next;
+}
+
+function cellIsOpen(r, c) {
+  return r >= 0 && r < state.rows && c >= 0 && c < state.cols && !state.blocked.has(r + "," + c);
+}
+
+function pruneEndpointsToOpenCells() {
+  if (state.startCell && !cellIsOpen(state.startCell[0], state.startCell[1])) state.startCell = null;
+  if (state.endCell && !cellIsOpen(state.endCell[0], state.endCell[1])) state.endCell = null;
+}
+
+function sameCell(a, b) {
+  return !!a && !!b && a[0] === b[0] && a[1] === b[1];
+}
+
+function updateEndpointsNote() {
+  if (!state.startCell && !state.endCell) {
+    els.endpointsNote.style.display = "none";
+    return;
+  }
+  els.endpointsNote.style.display = "";
+  const parts = [];
+  if (state.startCell) parts.push(`<span class="chip"><span class="sw" style="background:var(--accent-path)"></span>start (${state.startCell[0] + 1}, ${state.startCell[1] + 1})</span>`);
+  if (state.endCell) parts.push(`<span class="chip"><span class="sw" style="background:var(--accent-cycle)"></span>end (${state.endCell[0] + 1}, ${state.endCell[1] + 1})</span>`);
+  els.endpointsNote.innerHTML = parts.join(" ");
+}
+
+/* ---------------- grid rendering ---------------- */
+const CELL = 42, GAP = 0;
+
+function renderGrid() {
+  const svg = els.gridSvg;
+  const w = state.cols * CELL, h = state.rows * CELL;
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.setAttribute("width", w);
+  svg.setAttribute("height", h);
+  svg.innerHTML = "";
+
+  const ns = "http://www.w3.org/2000/svg";
+  const cellsGroup = document.createElementNS(ns, "g");
+  svg.appendChild(cellsGroup);
+
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) {
+      const key = r + "," + c;
+      const isBlocked = state.blocked.has(key);
+      const rect = document.createElementNS(ns, "rect");
+      rect.setAttribute("x", c * CELL);
+      rect.setAttribute("y", r * CELL);
+      rect.setAttribute("width", CELL);
+      rect.setAttribute("height", CELL);
+      const pickable = state.editMode === "endpoints" && !isBlocked;
+      rect.setAttribute("class", "cell" + (isBlocked ? " blocked" : "") + (pickable ? " pickable" : ""));
+      rect.setAttribute("tabindex", "0");
+      rect.setAttribute("role", "button");
+      rect.setAttribute("aria-pressed", String(isBlocked));
+      const label = state.editMode === "endpoints"
+        ? `Cell row ${r + 1}, column ${c + 1}${sameCell([r, c], state.startCell) ? ", start" : ""}${sameCell([r, c], state.endCell) ? ", end" : ""}`
+        : `Cell row ${r + 1}, column ${c + 1}, ${isBlocked ? "cut out" : "open"}`;
+      rect.setAttribute("aria-label", label);
+      rect.dataset.r = r;
+      rect.dataset.c = c;
+      rect.addEventListener("click", onCellToggle);
+      rect.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onCellToggle(e); }
+      });
+      cellsGroup.appendChild(rect);
+
+      if (isBlocked) {
+        const x0 = c * CELL, y0 = r * CELL;
+        for (const line of hatchLines(x0, y0, CELL)) {
+          const l = document.createElementNS(ns, "line");
+          l.setAttribute("x1", line[0]); l.setAttribute("y1", line[1]);
+          l.setAttribute("x2", line[2]); l.setAttribute("y2", line[3]);
+          l.setAttribute("class", "cell-hatch");
+          cellsGroup.appendChild(l);
+        }
+      }
+    }
+  }
+
+  if (state.walkType === "eulerian") {
+    drawOddMarkers(svg, ns);
+    if (state.eulerRoute) drawEulerRoute(svg, ns);
+  } else {
+    drawEndpointMarkers(svg, ns);
+    if (state.route) drawRoute(svg, ns);
+  }
+}
+
+function drawEndpointMarkers(svg, ns) {
+  if (!state.startCell && !state.endCell) return;
+  const group = document.createElementNS(ns, "g");
+  group.setAttribute("class", "endpoint-marker");
+  svg.appendChild(group);
+  const r = Math.max(7, CELL * 0.2);
+  if (state.startCell) {
+    const [row, col] = state.startCell;
+    const cx = col * CELL + r + 3, cy = row * CELL + r + 3;
+    const circ = document.createElementNS(ns, "circle");
+    circ.setAttribute("cx", cx); circ.setAttribute("cy", cy); circ.setAttribute("r", r);
+    circ.setAttribute("class", "glyph-start");
+    circ.setAttribute("stroke", "var(--accent-path)");
+    circ.setAttribute("fill", "var(--surface-2)");
+    group.appendChild(circ);
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", cx); t.setAttribute("y", cx === cy ? cy + 1 : cy + 1);
+    t.setAttribute("fill", "var(--accent-path)");
+    t.textContent = "S";
+    group.appendChild(t);
+  }
+  if (state.endCell) {
+    const [row, col] = state.endCell;
+    const cx = col * CELL + CELL - r - 3, cy = row * CELL + r + 3;
+    const sq = document.createElementNS(ns, "rect");
+    sq.setAttribute("x", cx - r); sq.setAttribute("y", cy - r);
+    sq.setAttribute("width", r * 2); sq.setAttribute("height", r * 2);
+    sq.setAttribute("class", "glyph-end");
+    sq.setAttribute("stroke", "var(--accent-cycle)");
+    sq.setAttribute("fill", "var(--surface-2)");
+    group.appendChild(sq);
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", cx); t.setAttribute("y", cy + 1);
+    t.setAttribute("fill", "var(--accent-cycle)");
+    t.textContent = "E";
+    group.appendChild(t);
+  }
+}
+
+function hatchLines(x0, y0, size) {
+  const lines = [];
+  const step = size / 3;
+  for (let k = -2; k <= 2; k++) {
+    const x1 = x0 + Math.max(0, k * step), y1 = y0 + Math.max(0, -k * step);
+    const x2 = x0 + Math.min(size, size + k * step), y2 = y0 + Math.min(size, size - k * step);
+    if (x1 < x0 + size && y1 < y0 + size && x2 > x0 && y2 > y0) lines.push([x1, y1, x2, y2]);
+  }
+  return lines;
+}
+
+function drawRoute(svg, ns) {
+  const { cells, mode } = state.route;
+  const color = mode === "cycle" ? "var(--accent-cycle)" : "var(--accent-path)";
+  const pts = cells.map(([r, c]) => [c * CELL + CELL / 2, r * CELL + CELL / 2]);
+
+  const group = document.createElementNS(ns, "g");
+  group.setAttribute("aria-hidden", "true");
+  group.style.pointerEvents = "none";
+  svg.appendChild(group);
+
+  let d = `M ${pts[0][0]} ${pts[0][1]} `;
+  for (let i = 1; i < pts.length; i++) d += `L ${pts[i][0]} ${pts[i][1]} `;
+  if (mode === "cycle") d += `L ${pts[0][0]} ${pts[0][1]} `;
+
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", d);
+  path.setAttribute("class", "route-line");
+  path.setAttribute("stroke", color);
+  path.setAttribute("stroke-width", Math.max(2.5, CELL * 0.09));
+  group.appendChild(path);
+
+  const len = path.getTotalLength();
+  path.style.strokeDasharray = String(len);
+  path.style.strokeDashoffset = String(len);
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) {
+    path.style.strokeDashoffset = "0";
+  } else {
+    const duration = Math.min(2600, 500 + cells.length * 22);
+    path.style.transition = `stroke-dashoffset ${duration}ms cubic-bezier(.4,.1,.2,1)`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { path.style.strokeDashoffset = "0"; }));
+  }
+
+  const startRadius = Math.max(4.5, CELL * 0.14);
+  const startCircle = document.createElementNS(ns, "circle");
+  startCircle.setAttribute("cx", pts[0][0]);
+  startCircle.setAttribute("cy", pts[0][1]);
+  startCircle.setAttribute("r", startRadius);
+  startCircle.setAttribute("class", "route-marker-start");
+  startCircle.setAttribute("stroke", color);
+  group.appendChild(startCircle);
+
+  if (mode === "path" && pts.length > 1) {
+    const endSize = Math.max(6, CELL * 0.18);
+    const [ex, ey] = pts[pts.length - 1];
+    const endRect = document.createElementNS(ns, "rect");
+    endRect.setAttribute("x", ex - endSize / 2);
+    endRect.setAttribute("y", ey - endSize / 2);
+    endRect.setAttribute("width", endSize);
+    endRect.setAttribute("height", endSize);
+    endRect.setAttribute("fill", "none");
+    endRect.setAttribute("stroke", color);
+    endRect.setAttribute("stroke-width", 2.5);
+    group.appendChild(endRect);
+  }
+}
+
+/* ---------------- Eulerian mode: odd-degree markers + walk tracing ---------------- */
+
+function drawOddMarkers(svg, ns) {
+  const graph = state.eulerGraph;
+  if (!graph) return;
+  const group = document.createElementNS(ns, "g");
+  group.setAttribute("aria-hidden", "true");
+  svg.appendChild(group);
+  const radius = Math.max(5, CELL * 0.16);
+  for (let i = 0; i < graph.n; i++) {
+    if (graph.degree[i] % 2 !== 1) continue;
+    const [r, c] = graph.open[i];
+    const circ = document.createElementNS(ns, "circle");
+    circ.setAttribute("cx", c * CELL + CELL / 2);
+    circ.setAttribute("cy", r * CELL + CELL / 2);
+    circ.setAttribute("r", radius);
+    circ.setAttribute("class", "odd-marker");
+    group.appendChild(circ);
+  }
+}
+
+function drawEulerRoute(svg, ns) {
+  const { cells, closed, retraced } = state.eulerRoute;
+  const color = closed ? "var(--accent-cycle)" : "var(--accent-path)";
+  const pts = cells.map(([r, c]) => [c * CELL + CELL / 2, r * CELL + CELL / 2]);
+
+  const group = document.createElementNS(ns, "g");
+  group.setAttribute("aria-hidden", "true");
+  group.style.pointerEvents = "none";
+  svg.appendChild(group);
+
+  // Walks through every point in order, revisits included -- unlike a
+  // Hamiltonian cycle's route, a closed Eulerian/spanning walk's cell list
+  // already ends back at its own first point, so no extra closing segment
+  // is added here.
+  let d = `M ${pts[0][0]} ${pts[0][1]} `;
+  for (let i = 1; i < pts.length; i++) d += `L ${pts[i][0]} ${pts[i][1]} `;
+
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("d", d);
+  path.setAttribute("class", "route-line");
+  path.setAttribute("stroke", color);
+  path.setAttribute("stroke-width", Math.max(2.5, CELL * 0.09));
+  group.appendChild(path);
+
+  const len = path.getTotalLength();
+  path.style.strokeDasharray = String(len);
+  path.style.strokeDashoffset = String(len);
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) {
+    path.style.strokeDashoffset = "0";
+  } else {
+    const duration = Math.min(4000, 500 + cells.length * 16);
+    path.style.transition = `stroke-dashoffset ${duration}ms cubic-bezier(.4,.1,.2,1)`;
+    requestAnimationFrame(() => requestAnimationFrame(() => { path.style.strokeDashoffset = "0"; }));
+  }
+
+  const startRadius = Math.max(4.5, CELL * 0.14);
+  const startCircle = document.createElementNS(ns, "circle");
+  startCircle.setAttribute("cx", pts[0][0]);
+  startCircle.setAttribute("cy", pts[0][1]);
+  startCircle.setAttribute("r", startRadius);
+  startCircle.setAttribute("class", "route-marker-start");
+  startCircle.setAttribute("stroke", color);
+  group.appendChild(startCircle);
+
+  if (!closed) {
+    const endSize = Math.max(6, CELL * 0.18);
+    const [ex, ey] = pts[pts.length - 1];
+    const endRect = document.createElementNS(ns, "rect");
+    endRect.setAttribute("x", ex - endSize / 2);
+    endRect.setAttribute("y", ey - endSize / 2);
+    endRect.setAttribute("width", endSize);
+    endRect.setAttribute("height", endSize);
+    endRect.setAttribute("fill", "none");
+    endRect.setAttribute("stroke", color);
+    endRect.setAttribute("stroke-width", 2.5);
+    group.appendChild(endRect);
+  }
+
+  if (retraced && retraced.length) {
+    const tickGroup = document.createElementNS(ns, "g");
+    tickGroup.setAttribute("aria-hidden", "true");
+    svg.appendChild(tickGroup);
+    const tickLen = Math.max(10, CELL * 0.4);
+    const tickGap = Math.max(3, CELL * 0.08);
+    for (let i = 0; i < retraced.length; i++) {
+      if (!retraced[i]) continue;
+      const [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+      const segLen = Math.hypot(x2 - x1, y2 - y1) || 1;
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      const ux = (x2 - x1) / segLen, uy = (y2 - y1) / segLen; // unit along the segment
+      const px = -uy, py = ux; // unit perpendicular
+      // a short double-hash (like a tally mark) across the line, to read as
+      // "crossed twice" rather than a single ambiguous dash
+      for (const off of [-tickGap / 2, tickGap / 2]) {
+        const cx = mx + ux * off, cy = my + uy * off;
+        const tick = document.createElementNS(ns, "line");
+        tick.setAttribute("x1", cx - (px * tickLen) / 2);
+        tick.setAttribute("y1", cy - (py * tickLen) / 2);
+        tick.setAttribute("x2", cx + (px * tickLen) / 2);
+        tick.setAttribute("y2", cy + (py * tickLen) / 2);
+        tick.setAttribute("class", "retrace-tick");
+        tickGroup.appendChild(tick);
+      }
+    }
+  }
+}
+
+function computeEulerInfo() {
+  const blockedArr = Array.from(state.blocked, (k) => k.split(",").map(Number));
+  state.eulerGraph = buildGraph(state.rows, state.cols, blockedArr);
+  state.eulerInfo = classify(state.eulerGraph);
+  renderEulerCard();
+}
+
+function renderEulerCard() {
+  const graph = state.eulerGraph, info = state.eulerInfo;
+  if (!graph || !info) return;
+  els.eulerEdgesValue.textContent = fmtBig(String(graph.edgeCount));
+  const oddCount = info.odd ? info.odd.length : 0;
+  els.eulerOddValue.textContent = String(oddCount);
+  els.eulerOddValue.classList.toggle("warn", oddCount > 0);
+
+  let statusText, walkEnabled = false;
+  if (info.kind === "empty") {
+    statusText = graph.n === 0 ? "No open cells yet." : "No doorways yet — every open room is isolated.";
+  } else if (info.kind === "disconnected") {
+    statusText = `This shape splits into ${info.components} separate regions joined by no doorway — no single walk can cross every doorway. "Trace spanning walk" covers the largest region.`;
+  } else if (info.kind === "circuit") {
+    statusText = "Eulerian circuit possible — every room has an even number of doors, so a walk can cross every doorway once and return to its start.";
+    walkEnabled = true;
+  } else if (info.kind === "path") {
+    statusText = "Eulerian path possible — exactly two rooms have an odd number of doors (ringed below); a walk must start at one and end at the other.";
+    walkEnabled = true;
+  } else {
+    statusText = `No Eulerian walk — ${fmtBig(String(oddCount))} rooms have an odd number of doors (need exactly 0 or 2). "Trace spanning walk" finds the shortest walk that still crosses every doorway.`;
+  }
+  els.eulerStatus.textContent = statusText;
+  els.eulerWalkBtn.disabled = !walkEnabled;
+  els.spanningWalkBtn.disabled = graph.edgeCount === 0;
+}
+
+function traceEulerianWalk() {
+  const graph = state.eulerGraph, info = state.eulerInfo;
+  if (!graph || !info || (info.kind !== "circuit" && info.kind !== "path")) return;
+  const { verts } = eulerianWalk(graph, info.start);
+  const cells = verts.map((i) => graph.open[i]);
+  state.eulerRoute = { cells, closed: info.kind === "circuit", retraced: null };
+  els.eulerRouteCaption.textContent = info.kind === "circuit"
+    ? `Eulerian circuit: crosses all ${fmtBig(String(graph.edgeCount))} doorways exactly once and returns to its start.`
+    : `Eulerian path: crosses all ${fmtBig(String(graph.edgeCount))} doorways exactly once, start to end.`;
+  renderGrid();
+}
+
+function traceSpanningWalk() {
+  const graph = state.eulerGraph;
+  if (!graph || graph.edgeCount === 0) return;
+  const components = spanningWalk(graph);
+  if (components.length === 0) return;
+  let best = components[0];
+  for (const comp of components) if (comp.verts.length > best.verts.length) best = comp;
+  const cells = best.verts.map((i) => graph.open[i]);
+  state.eulerRoute = { cells, closed: true, retraced: best.retraced };
+
+  let caption = `Spanning walk: crosses all ${fmtBig(String(best.physicalEdgeCount))} doorways in this region`;
+  caption += best.retracedCount > 0
+    ? `, re-crossing ${fmtBig(String(best.retracedCount))} of them (ticked below) to get back to its start.`
+    : " with no re-crossings needed.";
+  if (best.approximate) caption += " The doorway pairing is a close, fast heuristic here, not a proven exact minimum — too many odd-doored rooms for an exhaustive search.";
+  if (components.length > 1) {
+    let otherEdges = 0;
+    for (const comp of components) if (comp !== best) otherEdges += comp.physicalEdgeCount;
+    caption += ` This shape splits into ${components.length} separate regions; ${fmtBig(String(otherEdges))} doorways elsewhere aren't reachable from this walk.`;
+  }
+  els.eulerRouteCaption.textContent = caption;
+  renderGrid();
+}
+
+function setWalkType(type) {
+  if (state.walkType === type) return;
+  state.walkType = type;
+  els.walkHamiltonianBtn.setAttribute("aria-pressed", String(type === "hamiltonian"));
+  els.walkEulerianBtn.setAttribute("aria-pressed", String(type === "eulerian"));
+  els.hamiltonianCard.style.display = type === "hamiltonian" ? "" : "none";
+  els.eulerCard.style.display = type === "eulerian" ? "" : "none";
+  els.chartSection.style.display = type === "hamiltonian" ? "" : "none";
+  els.cellModeRow.style.display = type === "hamiltonian" ? "" : "none";
+  if (type === "eulerian" && state.editMode !== "cells") {
+    state.editMode = "cells";
+    els.modeCellsBtn.setAttribute("aria-pressed", "true");
+    els.modeEndpointsBtn.setAttribute("aria-pressed", "false");
+    els.cellsBtnRow.style.display = "";
+    els.endpointsBtnRow.style.display = "none";
+    els.gridCardSub.textContent = "Click any cell to cut it out of the grid. Routes weave around the gaps.";
+  }
+  resetRoute();
+  renderGrid();
+  updateNote();
+  if (type === "hamiltonian") scheduleCompute();
+}
+els.walkHamiltonianBtn.addEventListener("click", () => setWalkType("hamiltonian"));
+els.walkEulerianBtn.addEventListener("click", () => setWalkType("eulerian"));
+els.eulerWalkBtn.addEventListener("click", traceEulerianWalk);
+els.spanningWalkBtn.addEventListener("click", traceSpanningWalk);
+
+function resetRoute() {
+  state.route = null;
+  state.browseMode = null;
+  state.browseTotal = { path: null, cycle: null };
+  state.rankEntries = null;
+  state.rankActiveIndex = null;
+  state.rankMode = null;
+  state.eulerRoute = null;
+  els.routeCaption.textContent = "";
+  els.navRow.style.display = "none";
+  els.rankList.style.display = "none";
+  els.rankList.innerHTML = "";
+  els.browseStatus.style.display = "none";
+  els.eulerRouteCaption.textContent = "";
+  if (state.walkType === "eulerian") computeEulerInfo();
+}
+
+function onCellToggle(e) {
+  const r = Number(e.currentTarget.dataset.r), c = Number(e.currentTarget.dataset.c);
+
+  if (state.editMode === "endpoints") {
+    if (state.blocked.has(r + "," + c)) return; // can't pick a cut-out cell
+    if (sameCell([r, c], state.startCell)) state.startCell = null;
+    else if (sameCell([r, c], state.endCell)) state.endCell = null;
+    else if (!state.startCell) state.startCell = [r, c];
+    else if (!state.endCell && !sameCell([r, c], state.startCell)) state.endCell = [r, c];
+    else state.endCell = [r, c]; // both already set -- replace end with the new pick
+    resetRoute();
+    renderGrid();
+    updateEndpointsNote();
+    scheduleCompute();
+    return;
+  }
+
+  const key = r + "," + c;
+  if (state.blocked.has(key)) state.blocked.delete(key);
+  else state.blocked.add(key);
+  pruneEndpointsToOpenCells();
+  resetRoute();
+  renderGrid();
+  updateNote();
+  updateEndpointsNote();
+  scheduleCompute();
+}
+
+function updateNote() {
+  const total = state.rows * state.cols;
+  const openCount = total - state.blocked.size;
+  let html = `<span class="chip"><span class="sw"></span>${openCount} open cell${openCount === 1 ? "" : "s"}</span>`;
+  if (state.walkType === "hamiltonian" && openCount > 0 && openCount % 2 === 1) {
+    html += ` <span class="chip warn">odd count &mdash; no cycle is possible</span>`;
+  }
+  els.gridNote.innerHTML = html;
+}
+
+/* ---------------- dims controls ---------------- */
+function setDims(rows, cols) {
+  state.rows = clampDim(rows);
+  state.cols = clampDim(cols);
+  els.rowsVal.textContent = state.rows;
+  els.colsVal.textContent = state.cols;
+  pruneBlockedToBounds();
+  pruneEndpointsToOpenCells();
+  resetRoute();
+  renderGrid();
+  updateNote();
+  updateEndpointsNote();
+  updateStepperDisabled();
+  renderChart();
+  scheduleCompute();
+}
+function updateStepperDisabled() {
+  els.rowsDec.disabled = state.rows <= MIN_N;
+  els.rowsInc.disabled = state.rows >= MAX_N;
+  els.colsDec.disabled = state.cols <= MIN_N;
+  els.colsInc.disabled = state.cols >= MAX_N;
+}
+
+els.rowsDec.addEventListener("click", () => setDims(state.rows - 1, state.cols));
+els.rowsInc.addEventListener("click", () => setDims(state.rows + 1, state.cols));
+els.colsDec.addEventListener("click", () => setDims(state.rows, state.cols - 1));
+els.colsInc.addEventListener("click", () => setDims(state.rows, state.cols + 1));
+
+els.clearBtn.addEventListener("click", () => {
+  state.blocked = new Set();
+  pruneEndpointsToOpenCells();
+  resetRoute();
+  renderGrid();
+  updateNote();
+  updateEndpointsNote();
+  scheduleCompute();
+});
+
+els.randomizeBtn.addEventListener("click", () => {
+  const total = state.rows * state.cols;
+  const targetHoles = Math.max(1, Math.round(total * (0.08 + Math.random() * 0.14)));
+  const all = [];
+  for (let r = 0; r < state.rows; r++) for (let c = 0; c < state.cols; c++) all.push(r + "," + c);
+  for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
+  state.blocked = new Set(all.slice(0, Math.min(targetHoles, total - 1)));
+  pruneEndpointsToOpenCells();
+  resetRoute();
+  renderGrid();
+  updateNote();
+  updateEndpointsNote();
+  scheduleCompute();
+});
+
+/* ---------------- edit mode + start/end picking ---------------- */
+function setEditMode(mode) {
+  state.editMode = mode;
+  els.modeCellsBtn.setAttribute("aria-pressed", String(mode === "cells"));
+  els.modeEndpointsBtn.setAttribute("aria-pressed", String(mode === "endpoints"));
+  els.cellsBtnRow.style.display = mode === "cells" ? "" : "none";
+  els.endpointsBtnRow.style.display = mode === "endpoints" ? "" : "none";
+  els.gridCardSub.textContent = mode === "endpoints"
+    ? "Click a cell to set it as start, then click another to set the end. Click a set cell again to clear it."
+    : "Click any cell to cut it out of the grid. Routes weave around the gaps.";
+  renderGrid();
+}
+els.modeCellsBtn.addEventListener("click", () => setEditMode("cells"));
+els.modeEndpointsBtn.addEventListener("click", () => setEditMode("endpoints"));
+
+els.clearEndpointsBtn.addEventListener("click", () => {
+  state.startCell = null;
+  state.endCell = null;
+  resetRoute();
+  renderGrid();
+  updateEndpointsNote();
+  scheduleCompute();
+});
+
+/* ---------------- computation orchestration ---------------- */
+let computeDebounceTimer = null;
+let computeStartTime = 0;
+let elapsedTimer = null;
+
+function scheduleCompute(delay) {
+  if (state.walkType !== "hamiltonian") return; // Eulerian analysis runs synchronously elsewhere
+  if (computeDebounceTimer) clearTimeout(computeDebounceTimer);
+  computeDebounceTimer = setTimeout(runCompute, delay === undefined ? 350 : delay);
+}
+
+function runCompute() {
+  spawnWorker();
+  currentRequestId += 1;
+  const id = currentRequestId;
+  els.pathsValue.textContent = "—";
+  els.cyclesValue.textContent = "—";
+  els.pathsValue.className = "stat-value path tnum mono";
+  els.cyclesValue.className = "stat-value cycle tnum mono";
+  els.progressWrap.style.display = "";
+  els.timingNote.style.display = "none";
+  computeStartTime = performance.now();
+  if (elapsedTimer) clearInterval(elapsedTimer);
+  elapsedTimer = setInterval(() => {
+    const secs = ((performance.now() - computeStartTime) / 1000).toFixed(1);
+    els.progressNote.textContent = `counting… ${secs}s`;
+  }, 100);
+  els.progressNote.textContent = "counting…";
+  els.pathsLabel.textContent = "Hamiltonian paths" + constraintPhrase("path");
+
+  worker.postMessage({
+    id,
+    type: "count",
+    rows: state.rows,
+    cols: state.cols,
+    blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
+    designated: designatedCellsArray(),
+  });
+}
+
+function fmtBig(str) {
+  const neg = str.startsWith("-");
+  const s = neg ? str.slice(1) : str;
+  const withCommas = s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return (neg ? "-" : "") + withCommas;
+}
+
+function handleWorkerMessage(e) {
+  const msg = e.data;
+  if (msg.id !== currentRequestId) return; // stale response, ignore
+
+  if (msg.type === "count-partial") {
+    const isZero = msg.value === "0";
+    if (msg.metric === "cycles") {
+      els.cyclesValue.textContent = fmtBig(msg.value);
+      els.cyclesValue.classList.toggle("zero", isZero);
+    } else {
+      els.pathsValue.textContent = fmtBig(msg.value);
+      els.pathsValue.classList.toggle("zero", isZero);
+    }
+  } else if (msg.type === "count-done") {
+    if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+    els.progressWrap.style.display = "none";
+    const totalMs = performance.now() - computeStartTime;
+    els.timingNote.style.display = "";
+    els.timingNote.textContent = `computed in ${(totalMs / 1000).toFixed(totalMs > 1000 ? 1 : 2)}s`;
+    window.__computeDoneCount = (window.__computeDoneCount || 0) + 1;
+  } else if (msg.type === "nav-building") {
+    els.rankList.style.display = "none";
+    els.navRow.style.display = "";
+    els.navReadout.textContent = "preparing…";
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = "preparing solution browser… (one-time per grid, can take a while on large grids)";
+    setBrowseControlsEnabled(false);
+  } else if (msg.type === "nav-empty") {
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = `no ${msg.mode === "cycle" ? "cycles" : "paths"}${constraintPhrase(msg.mode)} exist — nothing to browse.`;
+    els.navRow.style.display = "none";
+    setBrowseControlsEnabled(true);
+  } else if (msg.type === "nav-result") {
+    const total = BigInt(msg.total);
+    const index = BigInt(msg.index);
+    state.route = { cells: msg.cells, mode: msg.mode, index, total };
+    state.browseMode = msg.mode;
+    state.browseTotal[msg.mode] = total;
+    els.browseStatus.style.display = "none";
+    els.rankList.style.display = "none";
+    els.navRow.style.display = "";
+    els.routeCaption.textContent = "";
+    els.navReadout.textContent = `Solution ${fmtBig((index + 1n).toString())} of ${fmtBig(total.toString())}${constraintPhrase(msg.mode)}`;
+    els.navJumpInput.value = "";
+    els.navJumpInput.placeholder = fmtBig((index + 1n).toString());
+    setBrowseControlsEnabled(true);
+    els.navPrev.disabled = index === 0n;
+    els.navNext.disabled = index === total - 1n;
+    renderGrid();
+    window.__navResultCount = (window.__navResultCount || 0) + 1;
+  } else if (msg.type === "rank-building") {
+    els.navRow.style.display = "none";
+    els.rankList.style.display = "none";
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = "ranking… (one-time per grid, can take a while on large grids)";
+    setBrowseControlsEnabled(false);
+  } else if (msg.type === "rank-empty") {
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = `no ${msg.mode === "cycle" ? "cycles" : "paths"}${constraintPhrase(msg.mode)} exist — nothing to rank.`;
+    els.rankList.style.display = "none";
+    setBrowseControlsEnabled(true);
+  } else if (msg.type === "rank-result") {
+    state.rankEntries = msg.entries.map((e) => ({
+      turns: e.turns,
+      cells: e.cells,
+      index: e.index !== null ? BigInt(e.index) : null,
+      total: e.total !== null ? BigInt(e.total) : null,
+    }));
+    state.rankActiveIndex = null;
+    state.rankMode = msg.mode;
+    els.browseStatus.style.display = "none";
+    els.navRow.style.display = "none";
+    renderRankList();
+    setBrowseControlsEnabled(true);
+    window.__rankResultCount = (window.__rankResultCount || 0) + 1;
+  } else if (msg.type === "error") {
+    els.progressWrap.style.display = "none";
+    els.browseStatus.style.display = "";
+    els.browseStatus.textContent = "something went wrong computing that — try a different grid.";
+    setBrowseControlsEnabled(true);
+    console.error("worker error:", msg.message);
+  }
+}
+
+function setBrowseControlsEnabled(on) {
+  els.browsePathBtn.disabled = !on;
+  els.browseCycleBtn.disabled = !on;
+  els.navPrev.disabled = !on;
+  els.navNext.disabled = !on;
+  els.navRandomBtn.disabled = !on;
+  els.navJumpInput.disabled = !on;
+}
+
+function setBrowseOrder(order) {
+  state.browseOrder = order;
+  els.orderAnyBtn.setAttribute("aria-pressed", String(order === "any"));
+  els.orderMinBtn.setAttribute("aria-pressed", String(order === "min"));
+  els.orderMaxBtn.setAttribute("aria-pressed", String(order === "max"));
+}
+els.orderAnyBtn.addEventListener("click", () => setBrowseOrder("any"));
+els.orderMinBtn.addEventListener("click", () => setBrowseOrder("min"));
+els.orderMaxBtn.addEventListener("click", () => setBrowseOrder("max"));
+
+function renderRankList() {
+  const entries = state.rankEntries;
+  if (!entries || entries.length === 0) {
+    els.rankList.style.display = "none";
+    return;
+  }
+  els.rankList.style.display = "";
+  els.rankList.innerHTML = "";
+  entries.forEach((entry, i) => {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "rank-row" + (state.rankActiveIndex === i ? " active" : "");
+    // The rank position (#1..#10) is just this list's order -- the solution's
+    // real identity is its actual position in the full "any order" browse
+    // enumeration, so that's what's shown as the primary label.
+    const solLabel = entry.index !== null
+      ? `Solution ${fmtBig((entry.index + 1n).toString())} of ${fmtBig(entry.total.toString())}`
+      : `#${i + 1}`;
+    btn.innerHTML = `<span class="rank-num">#${i + 1}</span><span class="rank-body"><span class="rank-solnum">${solLabel}</span><span class="rank-turns">${entry.turns} turn${entry.turns === 1 ? "" : "s"}</span></span><span class="rank-chevron">view &rsaquo;</span>`;
+    btn.addEventListener("click", () => showRankEntry(i));
+    li.appendChild(btn);
+    els.rankList.appendChild(li);
+  });
+}
+
+function showRankEntry(i) {
+  const entry = state.rankEntries[i];
+  if (!entry) return;
+  state.rankActiveIndex = i;
+  state.route = { cells: entry.cells, mode: state.rankMode, index: entry.index, total: entry.total };
+  state.browseMode = null;
+  els.navRow.style.display = "none";
+  els.browseStatus.style.display = "none";
+  const solPart = entry.index !== null
+    ? `Solution ${fmtBig((entry.index + 1n).toString())} of ${fmtBig(entry.total.toString())} — `
+    : "";
+  els.routeCaption.textContent = `${solPart}#${i + 1} by turn count: ${entry.turns} turn${entry.turns === 1 ? "" : "s"}${constraintPhrase(state.rankMode)}.`;
+  renderRankList();
+  renderGrid();
+}
+
+function requestRank(mode) {
+  spawnWorkerIfNeeded();
+  currentRequestId += 1;
+  const id = currentRequestId;
+  setBrowseControlsEnabled(false);
+  worker.postMessage({
+    id,
+    type: "rank",
+    rows: state.rows,
+    cols: state.cols,
+    blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
+    mode,
+    designated: mode === "path" ? designatedCellsArray() : [],
+    startCell: mode === "cycle" ? state.startCell : null,
+    direction: state.browseOrder,
+    count: 10,
+  });
+}
+
+function spawnWorkerIfNeeded() {
+  if (!worker) spawnWorker();
+}
+
+/* ---------------- browse-by-number ---------------- */
+function randomBigIntBelow(total) {
+  // Uniform in [0, total): draw a value with exactly total's bit-length
+  // (chunked to fit doubles safely) and reject draws >= total. Since
+  // 2^bits < 2*total whenever bits is total's own bit-length, this takes
+  // under 2 tries on average -- true for any size, including total===1n.
+  const bits = total.toString(2).length;
+  let r;
+  do {
+    r = 0n;
+    let remaining = bits;
+    while (remaining > 0) {
+      const take = Math.min(30, remaining);
+      r = (r << BigInt(take)) | BigInt(Math.floor(Math.random() * (1 << take)));
+      remaining -= take;
+    }
+  } while (r >= total);
+  return r;
+}
+
+
+function requestNav(mode, indexStr) {
+  spawnWorkerIfNeeded();
+  currentRequestId += 1;
+  const id = currentRequestId;
+  setBrowseControlsEnabled(false);
+  worker.postMessage({
+    id,
+    type: "nav",
+    rows: state.rows,
+    cols: state.cols,
+    blocked: Array.from(state.blocked, (k) => k.split(",").map(Number)),
+    mode,
+    index: indexStr,
+    designated: mode === "path" ? designatedCellsArray() : [],
+    startCell: mode === "cycle" ? state.startCell : null,
+  });
+}
+
+function startBrowse(mode) {
+  // "Fewest/most turns" order goes through the ranking DP instead of the
+  // plain index browser -- same trigger buttons, different underlying query.
+  if (state.browseOrder !== "any") {
+    requestRank(mode);
+    return;
+  }
+  // Resume where we left off for this mode if we have a known index already,
+  // otherwise start at the first solution.
+  const resume = state.browseMode === mode && state.route && state.route.index !== null;
+  requestNav(mode, resume ? state.route.index.toString() : "0");
+}
+
+function navStep(delta) {
+  if (!state.route || state.route.index === null || !state.browseMode) return;
+  const next = state.route.index + BigInt(delta);
+  requestNav(state.browseMode, next.toString());
+}
+
+function navRandomWithinBrowse() {
+  if (!state.browseMode || state.browseTotal[state.browseMode] === null) return;
+  const total = state.browseTotal[state.browseMode];
+  requestNav(state.browseMode, randomBigIntBelow(total).toString());
+}
+
+els.browsePathBtn.addEventListener("click", () => startBrowse("path"));
+els.browseCycleBtn.addEventListener("click", () => startBrowse("cycle"));
+els.navPrev.addEventListener("click", () => navStep(-1));
+els.navNext.addEventListener("click", () => navStep(1));
+els.navRandomBtn.addEventListener("click", navRandomWithinBrowse);
+els.navJumpForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!state.browseMode) return;
+  const raw = els.navJumpInput.value.trim().replace(/,/g, "");
+  if (!/^\d+$/.test(raw)) return;
+  const oneBased = BigInt(raw);
+  if (oneBased < 1n) return;
+  requestNav(state.browseMode, (oneBased - 1n).toString());
+});
+
+/* ============================== Reference chart ============================== */
+const REFERENCE_DATA = [
+  { n: 2, paths: 4, cycles: 1 },
+  { n: 3, paths: 20, cycles: 0 },
+  { n: 4, paths: 276, cycles: 6 },
+  { n: 5, paths: 4324, cycles: 0 },
+  { n: 6, paths: 229348, cycles: 1072 },
+  { n: 7, paths: 13535280, cycles: 0 },
+  { n: 8, paths: 3023313284, cycles: 4638576 },
+  { n: 9, paths: 745416341496, cycles: 0 },
+  { n: 10, paths: 730044829512632, cycles: 467260456608 },
+];
+
+function renderChart() {
+  const svg = document.getElementById("chart-svg");
+  const ns = "http://www.w3.org/2000/svg";
+  const W = 820, H = 360;
+  const margin = { top: 16, right: 24, bottom: 40, left: 56 };
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  svg.innerHTML = "";
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+  const minLog = 0; // log10(1)
+  const maxVal = Math.max(...REFERENCE_DATA.map((d) => d.paths));
+  const maxLog = Math.ceil(Math.log10(maxVal));
+
+  function xFor(n) { return margin.left + ((n - 2) / (10 - 2)) * plotW; }
+  function yFor(v) {
+    const lv = v <= 0 ? 0 : Math.log10(v);
+    return margin.top + plotH - (lv / maxLog) * plotH;
+  }
+
+  const g = document.createElementNS(ns, "g");
+  svg.appendChild(g);
+
+  // horizontal gridlines at each power of ten
+  for (let p = 0; p <= maxLog; p++) {
+    const y = yFor(Math.pow(10, p));
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", margin.left); line.setAttribute("x2", W - margin.right);
+    line.setAttribute("y1", y); line.setAttribute("y2", y);
+    line.setAttribute("class", "grid-line-h");
+    g.appendChild(line);
+    const label = document.createElementNS(ns, "text");
+    label.setAttribute("x", margin.left - 10); label.setAttribute("y", y + 3.5);
+    label.setAttribute("text-anchor", "end");
+    label.setAttribute("class", "axis-label");
+    label.textContent = p === 0 ? "1" : `10${superscript(p)}`;
+    g.appendChild(label);
+  }
+
+  // x axis
+  const axisLine = document.createElementNS(ns, "line");
+  axisLine.setAttribute("x1", margin.left); axisLine.setAttribute("x2", W - margin.right);
+  axisLine.setAttribute("y1", margin.top + plotH); axisLine.setAttribute("y2", margin.top + plotH);
+  axisLine.setAttribute("class", "axis-line");
+  g.appendChild(axisLine);
+
+  for (const d of REFERENCE_DATA) {
+    const x = xFor(d.n);
+    const label = document.createElementNS(ns, "text");
+    label.setAttribute("x", x); label.setAttribute("y", margin.top + plotH + 20);
+    label.setAttribute("text-anchor", "middle");
+    label.setAttribute("class", "axis-label");
+    label.textContent = d.n + "×" + d.n;
+    g.appendChild(label);
+  }
+
+  // highlight current grid size if square and within range
+  if (state.rows === state.cols && state.rows >= 2 && state.rows <= 10) {
+    const x = xFor(state.rows);
+    const vline = document.createElementNS(ns, "line");
+    vline.setAttribute("x1", x); vline.setAttribute("x2", x);
+    vline.setAttribute("y1", margin.top); vline.setAttribute("y2", margin.top + plotH);
+    vline.setAttribute("class", "current-n-line");
+    g.appendChild(vline);
+    const vlabel = document.createElementNS(ns, "text");
+    vlabel.setAttribute("x", x); vlabel.setAttribute("y", margin.top - 4);
+    vlabel.setAttribute("text-anchor", "middle");
+    vlabel.setAttribute("class", "current-n-label");
+    vlabel.textContent = "current";
+    g.appendChild(vlabel);
+  }
+
+  drawSeries(g, ns, "paths", "var(--accent-path)", xFor, yFor);
+  drawSeries(g, ns, "cycles", "var(--accent-cycle)", xFor, yFor);
+
+  function drawSeries(g, ns, key, color, xFor, yFor) {
+    let d = "";
+    REFERENCE_DATA.forEach((pt, i) => {
+      const x = xFor(pt.n), y = yFor(Math.max(pt[key], 0.6));
+      d += (i === 0 ? "M " : "L ") + x + " " + y + " ";
+    });
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d.trim());
+    path.setAttribute("class", "chart-line");
+    path.setAttribute("stroke", color);
+    g.appendChild(path);
+
+    REFERENCE_DATA.forEach((pt) => {
+      const x = xFor(pt.n), y = yFor(Math.max(pt[key], 0.6));
+      const dot = document.createElementNS(ns, "circle");
+      dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", 4.5);
+      dot.setAttribute("fill", color);
+      dot.setAttribute("class", "chart-dot");
+      dot.style.cursor = "pointer";
+      dot.addEventListener("mousemove", (evt) => showTooltip(evt, pt, key));
+      dot.addEventListener("mouseleave", hideTooltip);
+      dot.addEventListener("focus", (evt) => showTooltip(evt, pt, key));
+      dot.addEventListener("blur", hideTooltip);
+      dot.setAttribute("tabindex", "0");
+      g.appendChild(dot);
+    });
+  }
+}
+
+function superscript(n) {
+  const map = { 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" };
+  return String(n).split("").map((d) => map[d]).join("");
+}
+
+function showTooltip(evt, pt, key) {
+  const tip = els.tooltip;
+  const label = key === "paths" ? "Hamiltonian paths" : "Hamiltonian cycles";
+  tip.innerHTML = `${pt.n}×${pt.n} &middot; ${label}<br><strong>${fmtBig(String(pt[key]))}</strong>`;
+  const rect = (evt.target.closest("svg")).getBoundingClientRect();
+  const cx = evt.clientX !== undefined ? evt.clientX : rect.left + Number(evt.target.getAttribute("cx"));
+  tip.style.left = (evt.clientX !== undefined ? evt.clientX : rect.left) + "px";
+  tip.style.top = (evt.clientY !== undefined ? evt.clientY : rect.top) + "px";
+  tip.classList.add("show");
+}
+function hideTooltip() { els.tooltip.classList.remove("show"); }
+
+/* ============================== Boot ============================== */
+function boot() {
+  els.rowsVal.textContent = state.rows;
+  els.colsVal.textContent = state.cols;
+  updateStepperDisabled();
+  renderGrid();
+  updateNote();
+  renderChart();
+  runCompute();
+  // Hero moment: trace an example cycle automatically once the page loads,
+  // via the numbered browser, so the "which one is this?" answer is right
+  // there from the first thing you see.
+  setTimeout(() => startBrowse("cycle"), 550);
+}
+boot();
+</script>
+
+</body>
+</html>
